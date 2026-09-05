@@ -2,35 +2,41 @@
 
 一个本地优先、支持多设备同步的个人工作助手，包含日历、待办事项、每日必做、番茄钟、备忘录和 AI 周报。
 
-项目不依赖 Supabase，也不需要 Docker。前端、API 和 PostgreSQL 都部署在自己的 VPS 上：
+项目不依赖 Supabase，也不需要 Docker。前端在本地电脑构建并随 GitHub 仓库发布，VPS 只负责运行 Node.js API、PostgreSQL 和 Nginx，不需要在服务器上构建前端。
 
 ```text
-浏览器
-  └─ HTTPS / 域名
-       └─ Nginx
-            ├─ /       → dist 静态前端
-            └─ /api/   → 127.0.0.1:3001 Node.js API
-                                      └─ 127.0.0.1:5432 PostgreSQL
+浏览器访问 http://VPS-IP:190
+  └─ Nginx :190
+       ├─ /       → dist 静态前端
+       └─ /api/   → 127.0.0.1:3100 Node.js API
+                                  └─ 127.0.0.1:5432 PostgreSQL
 ```
 
-公网只开放 80/443。API 和数据库仅监听 VPS 本机，不会与 Nginx 已托管的其他网站抢端口。
+## 一、本地构建并发布到 GitHub
 
-## VPS 要求
+本地电脑建议使用 Node.js 22 或更高版本：
 
-- Ubuntu 22.04/24.04 或类似 Linux
-- 建议至少 1 核 CPU、1 GB 内存、10 GB 可用磁盘
-- Node.js 20 或更高版本
-- PostgreSQL 14 或更高版本
-- Nginx
-- 一个已解析到 VPS 的域名
+```bash
+git clone https://github.com/mgl666/WorkAssistant.git
+cd WorkAssistant
+npm ci
+npm run build
+git add dist
+git commit -m "build: update production frontend"
+git push origin main
+```
 
-下面以 Ubuntu、域名 `your-domain.com` 和目录 `/var/www/work-assistant` 为例。
+`dist` 是可以直接由 Nginx 托管的静态文件，项目已将它纳入版本管理，以便 VPS 拉取后直接部署。
 
-## 一、安装软件
+不要提交 `.env.server`、数据库密码或 `node_modules`。后端依赖仍需在 VPS 安装，因为依赖可能与操作系统平台有关。
+
+## 二、VPS 安装必要软件
+
+下面以 Ubuntu、部署目录 `/var/www/work-assistant` 为例：
 
 ```bash
 sudo apt update
-sudo apt install -y git nginx postgresql postgresql-contrib certbot python3-certbot-nginx curl
+sudo apt install -y git nginx postgresql postgresql-contrib curl
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
@@ -44,7 +50,9 @@ psql --version
 nginx -v
 ```
 
-## 二、拉取项目
+VPS 不需要执行根目录的 `npm ci` 或 `npm run build`。
+
+## 三、拉取项目
 
 ```bash
 sudo mkdir -p /var/www/work-assistant
@@ -53,30 +61,31 @@ git clone https://github.com/mgl666/WorkAssistant.git /var/www/work-assistant
 cd /var/www/work-assistant
 ```
 
-## 三、创建 PostgreSQL 数据库
+如果项目已经位于 `/root/Project/WorkAssistant`，建议复制到 `/var/www`，避免 Nginx 无权访问 `/root`：
 
-创建数据库用户。命令会提示输入两次密码，请使用长随机密码并保存好：
+```bash
+sudo mkdir -p /var/www/work-assistant
+sudo cp -a /root/Project/WorkAssistant/. /var/www/work-assistant/
+cd /var/www/work-assistant
+```
+
+确认仓库包含本地生成的前端：
+
+```bash
+test -f dist/index.html && echo "dist 已就绪"
+```
+
+## 四、创建 PostgreSQL 数据库
 
 ```bash
 sudo -u postgres createuser --pwprompt work_assistant
 sudo -u postgres createdb --owner=work_assistant work_assistant
-```
-
-确认可以连接：
-
-```bash
 psql -h 127.0.0.1 -U work_assistant -d work_assistant -c 'select now();'
 ```
 
-这里输入刚才设置的密码。无需手动导入 SQL，API 第一次启动时会自动执行 `server/schema.sql` 创建数据表。
+API 第一次启动时会自动执行 `server/schema.sql`，无需手动导入 SQL。数据库 5432 端口不要开放到公网。
 
-请确认 PostgreSQL 没有对公网开放 5432。Ubuntu 默认通常只监听本机，可用下面的命令检查：
-
-```bash
-sudo ss -lntp | grep 5432
-```
-
-## 四、配置 API 环境变量
+## 五、配置并启动 API
 
 ```bash
 cd /var/www/work-assistant
@@ -84,138 +93,89 @@ cp .env.server.example .env.server
 nano .env.server
 ```
 
-配置示例：
+配置内容：
 
 ```dotenv
 PGHOST=127.0.0.1
 PGPORT=5432
 PGDATABASE=work_assistant
 PGUSER=work_assistant
-PGPASSWORD=这里填写刚才设置的数据库密码
-PORT=3001
+PGPASSWORD=这里填写数据库密码
+PORT=3100
 HOST=127.0.0.1
-COOKIE_SECURE=true
+COOKIE_SECURE=false
 SESSION_DAYS=30
 ```
 
-保护配置文件，避免其他系统用户读取密码：
+通过普通 HTTP 的 190 端口访问时，`COOKIE_SECURE` 必须为 `false`；以后启用 HTTPS 后再改成 `true`。
+
+安装后端依赖并启动服务：
 
 ```bash
 sudo chown root:www-data .env.server
 sudo chmod 640 .env.server
-```
-
-`.env.server` 已加入 `.gitignore`，不要提交到 GitHub。
-
-## 五、安装依赖并构建
-
-前端与 API 使用独立依赖：
-
-```bash
-cd /var/www/work-assistant
-npm ci
 npm --prefix server ci --omit=dev
-npm run build
-```
-
-构建结果位于 `/var/www/work-assistant/dist`。
-
-## 六、使用 systemd 启动 API
-
-复制服务文件：
-
-```bash
 sudo cp deploy/work-assistant-api.service /etc/systemd/system/work-assistant-api.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now work-assistant-api
-sudo systemctl status work-assistant-api
+curl http://127.0.0.1:3100/api/health
 ```
 
-检查 API：
-
-```bash
-curl http://127.0.0.1:3001/api/health
-```
-
-正常应返回：
-
-```json
-{"ok":true}
-```
-
-如果启动失败，查看日志：
+正常应返回 `{"ok":true}`。如果失败：
 
 ```bash
 sudo journalctl -u work-assistant-api -n 100 --no-pager
 ```
 
-API 只需要监听 `127.0.0.1:3001` 的 Nginx 反向代理入口，不要在防火墙中开放 3001。
+## 六、配置 Nginx 190 端口
 
-## 七、配置 Nginx
+已有的 180 端口网站不需要修改。为 WorkAssistant 新增独立配置：
 
 ```bash
 sudo cp deploy/nginx.conf.example /etc/nginx/sites-available/work-assistant
-sudo nano /etc/nginx/sites-available/work-assistant
 sudo ln -s /etc/nginx/sites-available/work-assistant /etc/nginx/sites-enabled/work-assistant
-```
-
-修改配置：
-
-- 把 `your-domain.com` 换成真实域名。
-- 确认 `root` 是 `/var/www/work-assistant/dist`。
-- 保留 `/api/` 到 `127.0.0.1:3001` 的反向代理。
-
-如果 Nginx 已经托管其他网站，不要删除原网站配置。多个网站可以共同监听 80/443，由不同的 `server_name` 区分。
-
-启用配置：
-
-```bash
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-## 八、配置 HTTPS
+配置默认使用：
+
+- 网站地址：`http://VPS公网IP:190`
+- 静态目录：`/var/www/work-assistant/dist`
+- API：`127.0.0.1:3100`
+- PostgreSQL：`127.0.0.1:5432`
+
+如果启用了 UFW：
 
 ```bash
-sudo certbot --nginx -d your-domain.com
-sudo nginx -t
-sudo systemctl reload nginx
+sudo ufw allow 190/tcp
+sudo ufw status
 ```
 
-访问 `https://your-domain.com`，进入“设置”注册账号。注册时，当前浏览器的访客数据会上传到 VPS。
+云服务器控制台如果有安全组，也需要允许 TCP 190。不要开放 3100 和 5432。
 
-## 从旧 Supabase 版本迁移
+## 七、日常更新
 
-新旧数据库结构不同，无法直接读取 Supabase 数据。推荐这样迁移：
+先在本地电脑构建并推送：
 
-1. 在旧版本“设置 → 数据管理”中导出 JSON 备份。
-2. 部署新版本并注册 VPS 账号。
-3. 在新版本导入备份，选择“合并到现有数据”。
-4. 点击“立即同步”。
-5. 在另一台设备登录检查数据，确认无误后再停用 Supabase。
+```bash
+npm ci
+npm run build
+git add dist
+git commit -m "build: update production frontend"
+git push origin main
+```
 
-即使浏览器本地缓存仍在，也建议先导出备份。
-
-## 日常更新
+然后在 VPS 执行：
 
 ```bash
 cd /var/www/work-assistant
 bash deploy/update.sh
-sudo systemctl reload nginx
 ```
 
-更新脚本会：
-
-1. 从 GitHub 拉取最新代码。
-2. 安装前端和 API 依赖。
-3. 重新构建前端。
-4. 重启并检查 API 服务。
-
-更新不会删除 PostgreSQL 数据。
+更新脚本只会拉取已经构建好的 `dist`、安装 API 生产依赖并重启 API，不会在 VPS 构建前端，也不会删除 PostgreSQL 数据。
 
 ## 数据库备份
-
-建议每天自动备份。手动备份：
 
 ```bash
 sudo mkdir -p /var/backups/work-assistant
@@ -224,82 +184,15 @@ sudo -u postgres sh -c \
   'pg_dump -Fc work_assistant > "/var/backups/work-assistant/work-assistant-$(date +%F-%H%M).dump"'
 ```
 
-只保留最近 30 天备份：
+只保留最近 30 天：
 
 ```bash
 sudo find /var/backups/work-assistant -type f -name '*.dump' -mtime +30 -delete
 ```
 
-可以将以上命令加入 root 的 `crontab`。
+## 从旧 Supabase 版本迁移
 
-## 数据库恢复
-
-恢复会覆盖现有内容，操作前请先再做一次备份：
-
-```bash
-sudo systemctl stop work-assistant-api
-sudo -u postgres pg_restore \
-  --clean --if-exists --no-owner \
-  -d work_assistant \
-  /var/backups/work-assistant/work-assistant-YYYY-MM-DD-HHMM.dump
-sudo systemctl start work-assistant-api
-```
-
-## 防火墙
-
-只开放 SSH、HTTP 和 HTTPS：
-
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
-sudo ufw enable
-sudo ufw status
-```
-
-不要开放端口 3001 和 5432。
-
-## 本地开发
-
-安装依赖：
-
-```bash
-npm ci
-npm --prefix server ci
-```
-
-本地需要可用的 PostgreSQL，并复制配置：
-
-```bash
-cp .env.server.example .env.server
-```
-
-将 `.env.server` 中的 `COOKIE_SECURE` 改为 `false`，加载环境变量后启动 API：
-
-```bash
-set -a
-source .env.server
-set +a
-npm --prefix server start
-```
-
-另开终端启动前端：
-
-```bash
-npm run dev
-```
-
-Vite 会把 `/api` 代理到 `127.0.0.1:3001`。
-
-## 常用维护命令
-
-```bash
-sudo systemctl status work-assistant-api
-sudo systemctl restart work-assistant-api
-sudo journalctl -u work-assistant-api -f
-sudo systemctl status postgresql
-sudo -u postgres psql -d work_assistant
-npm run typecheck
-npm run build
-```
-
-用户密码使用 Node.js `scrypt` 哈希保存。登录凭证使用 `HttpOnly`、`SameSite=Strict` Cookie，前端 JavaScript 无法读取会话令牌。AI API Key 仍只保存在当前浏览器，不上传到 VPS。
+1. 在旧版本“设置 → 数据管理”导出 JSON 备份。
+2. 在 VPS 版本注册并登录账号。
+3. 导入备份，选择“合并到现有数据”。
+4. 点击“立即同步”，再到其他设备登录检查数据。

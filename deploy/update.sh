@@ -19,10 +19,8 @@ node -e "if(Number(process.versions.node.split('.')[0])<20){console.error('✗ �
 echo "==> 拉取代码"
 git pull --ff-only
 
-echo "==> 安装依赖并构建前端"
-npm ci --no-audit --no-fund
+echo "==> 安装 API 生产依赖（前端 dist 已在本地构建并提交）"
 npm --prefix server ci --omit=dev --no-audit --no-fund
-npm run build
 
 echo "==> 重启 API"
 sudo install -m 644 deploy/work-assistant-api.service /etc/systemd/system/work-assistant-api.service
@@ -31,6 +29,6 @@ sudo systemctl restart work-assistant-api
 sudo systemctl --no-pager --full status work-assistant-api
 
 echo "==> 健康检查"
-curl --fail --silent --show-error http://127.0.0.1:3001/api/health
+curl --fail --silent --show-error http://127.0.0.1:3100/api/health
 echo
 echo "✅ 更新完成"
