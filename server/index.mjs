@@ -7,6 +7,7 @@ import pg from 'pg';
 const { Pool } = pg;
 const scrypt = promisify(crypto.scrypt);
 const port = Number(process.env.PORT || 3001);
+const host = process.env.HOST || '127.0.0.1';
 const secureCookie = process.env.COOKIE_SECURE !== 'false';
 const sessionDays = Math.max(1, Number(process.env.SESSION_DAYS || 30));
 const allowedTables = new Set(['events', 'todos', 'lists', 'notes', 'sessions', 'daily_tasks']);
@@ -158,7 +159,7 @@ app.use((error, _req, res, _next) => {
 
 await pool.query(await fs.readFile(new URL('./schema.sql', import.meta.url), 'utf8'));
 await pool.query('DELETE FROM app_sessions WHERE expires_at <= now()');
-const server = app.listen(port, '0.0.0.0', () => console.log(`WorkAssistant API listening on ${port}`));
+const server = app.listen(port, host, () => console.log(`WorkAssistant API listening on ${host}:${port}`));
 const shutdown = () => server.close(() => pool.end().finally(() => process.exit(0)));
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
