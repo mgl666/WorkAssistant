@@ -1,0 +1,40 @@
+/*
+ * Milkdown Crepe 暗色主题覆盖。
+ *
+ * Crepe 自带的 light/dark 主题文件都把变量写在 .milkdown 上、且没有暗色作用域，
+ * 同时引入两份会互相覆盖（后加载的赢）。这里只引入 light 主题，
+ * 暗色变量改由本文件声明，并挂在 html.dark 上，跟随应用的手动深浅色切换。
+ */
+.dark .milkdown {
+  --crepe-color-background: #0f172a;         /* slate-900 */
+  --crepe-color-on-background: #e2e8f0;      /* slate-200 */
+  --crepe-color-surface: #020617;            /* slate-950 */
+  --crepe-color-surface-low: #1e293b;        /* slate-800 */
+  --crepe-color-on-surface: #cbd5e1;         /* slate-300 */
+  --crepe-color-on-surface-variant: #94a3b8; /* slate-400 */
+  --crepe-color-outline: #475569;            /* slate-600 */
+  --crepe-color-primary: #818cf8;            /* indigo-400 */
+  --crepe-color-secondary: #1e293b;          /* slate-800 */
+  --crepe-color-on-secondary: #e2e8f0;       /* slate-200 */
+  --crepe-color-inverse: #e2e8f0;            /* slate-200 */
+  --crepe-color-on-inverse: #0f172a;         /* slate-900 */
+  --crepe-color-inline-code: #fb7185;        /* rose-400 */
+  --crepe-color-error: #fb7185;              /* rose-400 */
+  --crepe-color-hover: #1e293b;              /* slate-800 */
+  --crepe-color-selected: #334155;           /* slate-700 */
+  --crepe-color-inline-area: #1e293b;        /* slate-800 */
+
+  --crepe-shadow-1: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --crepe-shadow-2: 0 2px 6px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* 编辑器融入卡片背景，不自带底色与边框 */
+.milkdown {
+  background: transparent;
+  min-height: 100%;
+}
+
+.milkdown .ProseMirror {
+  min-height: 55vh;
+  outline: none;
+}
