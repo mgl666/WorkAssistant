@@ -11,7 +11,7 @@ import {
   Repeat2,
   Settings as SettingsIcon,
   Sun,
-  Timer,
+  Target,
   X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -27,9 +27,9 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: '概览', icon: LayoutDashboard },
   { to: '/calendar', label: '日历', icon: CalendarDays },
-  { to: '/pomodoro', label: '番茄时钟', icon: Timer },
   { to: '/todos', label: '待办事项', icon: ListChecks },
   { to: '/daily', label: '每日必做', icon: Repeat2 },
+  { to: '/goals', label: '长期目标', icon: Target },
   { to: '/notes', label: '备忘录', icon: NotebookPen },
   { to: '/weekly', label: 'AI 周报', icon: FileText },
   // 「小工具」功能保留但暂时不在主导航露出，避免新用户觉得是个半成品页面

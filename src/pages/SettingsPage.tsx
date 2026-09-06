@@ -106,6 +106,7 @@ export default function SettingsPage() {
       notes: store.notes,
       sessions: store.sessions,
       daily_tasks: store.daily_tasks,
+      goals: store.goals,
       settings: safeSettings,
     };
     const stamp = new Date().toISOString().slice(0, 10);
@@ -133,6 +134,7 @@ export default function SettingsPage() {
         ['备忘录', (data.notes as unknown[] | undefined)?.length ?? 0],
         ['番茄记录', (data.sessions as unknown[] | undefined)?.length ?? 0],
         ['每日必做', (data.daily_tasks as unknown[] | undefined)?.length ?? 0],
+        ['长期目标', (data.goals as unknown[] | undefined)?.length ?? 0],
       ];
       if (!counts.some(([, n]) => n > 0)) {
         toast('文件里没有可导入的数据');
@@ -422,7 +424,7 @@ export default function SettingsPage() {
         }
       >
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          当前账号的日程、待办、每日必做、备忘录与番茄记录都会被删除。建议先导出备份。
+          当前账号的日程、待办、每日必做、长期目标、备忘录与番茄记录都会被删除。建议先导出备份。
         </p>
       </Modal>
     </div>
