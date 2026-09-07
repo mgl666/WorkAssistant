@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, GripVertical, MoreVertical, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, GripVertical, MoreVertical, Plus, Target, Trash2, X } from 'lucide-react';
 import { Empty, useToast } from '@/components/ui';
 import { useDeletable } from '@/hooks/useDeletable';
 import { cn } from '@/lib/utils';
@@ -86,7 +86,6 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
   const store = useStore();
   const deletable = useDeletable();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(goal.title);
   const [adding, setAdding] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
@@ -100,6 +99,8 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
     .sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt)), [goal.tasks]);
   const pending = roots.filter((task) => !task.done);
   const completed = roots.filter((task) => task.done);
+
+  useEffect(() => setName(goal.title), [goal.title]);
 
   const addTask = () => {
     if (!taskTitle.trim()) return;
@@ -122,7 +123,6 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
   const finishRename = () => {
     store.renameGoal(goal.id, name);
     setName(name.trim() || goal.title);
-    setRenaming(false);
   };
 
   return (
@@ -142,20 +142,18 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
         >
           <GripVertical size={18} />
         </button>
-        {renaming ? (
-          <input
-            autoFocus
-            className="input h-10 min-w-0 flex-1 text-lg font-medium"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={finishRename}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') finishRename();
-              if (e.key === 'Escape') { setName(goal.title); setRenaming(false); }
-            }}
-          />
-        ) : <h2 className="min-w-0 flex-1 truncate text-xl font-medium text-slate-800 dark:text-slate-100">{goal.title}</h2>}
-        {!renaming && <button className="btn-ghost shrink-0 px-2" title="修改目标名称" aria-label={`修改长期目标「${goal.title}」`} onClick={() => { setMenuOpen(false); setName(goal.title); setRenaming(true); }}><Pencil size={16} /></button>}
+        <input
+          className="min-w-0 flex-1 truncate border-0 bg-transparent p-0 text-xl font-medium text-slate-800 outline-none focus:ring-0 dark:text-slate-100"
+          title="点击可直接修改目标名称"
+          aria-label="长期目标名称"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          onBlur={finishRename}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+            if (event.key === 'Escape') setName(goal.title);
+          }}
+        />
         <div className="flex shrink-0 items-center rounded-lg border border-slate-200 p-0.5 dark:border-slate-700 sm:hidden" aria-label="调整目标顺序">
           <button
             disabled={index === 0}
@@ -181,7 +179,6 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
           <div className="absolute right-0 top-9 z-10 w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
             <button disabled={index === 0} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800" onClick={() => { onMove(index - 1); setMenuOpen(false); }}><ArrowLeft size={14} />向前移动</button>
             <button disabled={index === total - 1} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800" onClick={() => { onMove(index + 1); setMenuOpen(false); }}><ArrowRight size={14} />向后移动</button>
-            <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { setMenuOpen(false); setRenaming(true); }}><Pencil size={14} />重命名</button>
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => { setMenuOpen(false); deletable(`已删除长期目标「${goal.title}」`, () => store.removeGoal(goal.id), { confirm: `删除「${goal.title}」会同时删除其中所有任务，确定继续吗？` }); }}><Trash2 size={14} />删除目标</button>
           </div>
         )}
@@ -246,7 +243,9 @@ function GoalTaskRow({ goal, task, siblings, collapsed, onToggleCollapse, childF
   return (
     <li>
       <div className="group flex min-h-10 items-center gap-3 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
-        {children.length > 0 ? <button className="-mr-1 flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" onClick={onToggleCollapse} aria-expanded={!collapsed} aria-label={`${collapsed ? '展开' : '折叠'} ${task.title} 的 ${children.length} 个二级任务`} title={`${collapsed ? '展开' : '折叠'}二级任务`}><ChevronRight size={15} className={cn('transition-transform', !collapsed && 'rotate-90')} /><span className="text-[10px] tabular-nums">{children.length}</span></button> : <span className="-mr-2 h-6 w-6 shrink-0" />}
+        <span className="flex h-6 w-9 shrink-0 items-center justify-center">
+          {children.length > 0 && <button className="flex h-6 w-9 items-center justify-center gap-0.5 rounded-md text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" onClick={onToggleCollapse} aria-expanded={!collapsed} aria-label={`${collapsed ? '展开' : '折叠'} ${task.title} 的 ${children.length} 个二级任务`} title={`${collapsed ? '展开' : '折叠'}二级任务`}><ChevronRight size={15} className={cn('transition-transform', !collapsed && 'rotate-90')} /><span className="text-[10px] tabular-nums">{children.length}</span></button>}
+        </span>
         <TaskCheck done={task.done} label={task.title} onClick={() => store.toggleGoalTask(goal.id, task.id)} />
         <input title="点击可直接修改任务名称" className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', task.done && 'text-slate-400 line-through')} value={task.title} onChange={(e) => store.updateGoalTask(goal.id, task.id, e.target.value)} aria-label="长期目标任务名称" />
         <TaskProgress percent={percent} />
