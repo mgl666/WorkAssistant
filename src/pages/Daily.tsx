@@ -13,7 +13,7 @@ import {
   Repeat2,
   Trash2,
 } from 'lucide-react';
-import { addDays, monthGrid, startOfWeek, toKey, todayKey } from '@/lib/date';
+import { addDays, fromKey, monthGrid, startOfWeek, toKey, todayKey } from '@/lib/date';
 import { PERIODIC_FREQUENCY_LABELS, periodicFrequencyOf, periodicScheduleText, periodicTaskDueOn } from '@/lib/periodic';
 import { cn } from '@/lib/utils';
 import { useStore, type PeriodicFrequency } from '@/store/useStore';
@@ -30,6 +30,7 @@ const PRESETS = [
 
 /** 未来日期使用预打卡状态，不与过去/今天的实际完成状态混用。 */
 type DayStatus = 'none' | 'miss' | 'partial' | 'done' | 'future' | 'planned';
+type MustView = 'day' | 'week' | 'month';
 
 const STATUS_CLS: Record<DayStatus, string> = {
   none: 'text-slate-400 dark:text-slate-600',
@@ -55,6 +56,7 @@ export default function Daily() {
   const [frequency, setFrequency] = useState<PeriodicFrequency>('daily');
   const [startDate, setStartDate] = useState(todayKey());
   const [dayOfMonth, setDayOfMonth] = useState(new Date().getDate());
+  const [mustView, setMustView] = useState<MustView>('day');
   const titleRef = useRef<HTMLInputElement>(null);
   const today = todayKey();
   /** 当前正在查看哪一天，支持回看历史并补打卡 */
@@ -136,11 +138,36 @@ export default function Daily() {
     setTitle('');
     setNote('');
   };
+  const moveMonth = (offset: number) => {
+    const next = new Date(year, month + offset, 1);
+    setCursor(next);
+    setViewDate(toKey(next));
+  };
 
-  const viewDue = tasksDueOn(viewDate);
-  const viewDone = viewDue.filter((t) => t.completedDates.includes(viewDate)).length;
+  const mustKeys = useMemo(() => {
+    const anchor = fromKey(viewDate);
+    if (mustView === 'day') return [viewDate];
+    if (mustView === 'week') {
+      const first = startOfWeek(anchor);
+      return Array.from({ length: 7 }, (_, index) => toKey(addDays(first, index)));
+    }
+    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const length = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+    return Array.from({ length }, (_, index) => toKey(addDays(first, index)));
+  }, [mustView, viewDate]);
+  const mustOccurrences = useMemo(() => orderedTasks.flatMap((task) => {
+    const frequencyOfTask = periodicFrequencyOf(task);
+    if (mustView === 'week' && frequencyOfTask !== 'weekly') return [];
+    if (mustView === 'month' && frequencyOfTask !== 'monthly') return [];
+    return mustKeys.filter((key) => periodicTaskDueOn(task, key)).map((key) => ({ task, key }));
+  }), [mustKeys, mustView, orderedTasks]);
+  const viewDone = mustOccurrences.filter(({ task, key }) => task.completedDates.includes(key)).length;
   const isToday = viewDate === today;
-  const isFutureView = viewDate > today;
+  const mustRangeText = mustView === 'day'
+    ? viewDate
+    : mustView === 'week'
+      ? `${mustKeys[0]} 至 ${mustKeys[mustKeys.length - 1]}`
+      : `${viewDate.slice(0, 7)} 月`;
 
   return (
     <div className="space-y-4">
@@ -186,13 +213,13 @@ export default function Daily() {
             <span className="flex items-center gap-1.5">周期任务日历 · {year} 年 {month + 1} 月</span>
           </SectionTitle>
           <div className="flex items-center gap-1">
-            <button className="btn-ghost px-1.5" onClick={() => setCursor(new Date(year, month - 1, 1))} aria-label="上个月">
+            <button className="btn-ghost px-1.5" onClick={() => moveMonth(-1)} aria-label="上个月">
               <ChevronLeft size={18} />
             </button>
             <button className="btn-outline px-2 py-1 text-xs" onClick={() => { const d = new Date(); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); setViewDate(today); }}>
               本月
             </button>
-            <button className="btn-ghost px-1.5" onClick={() => setCursor(new Date(year, month + 1, 1))} aria-label="下个月">
+            <button className="btn-ghost px-1.5" onClick={() => moveMonth(1)} aria-label="下个月">
               <ChevronRight size={18} />
             </button>
           </div>
@@ -211,7 +238,7 @@ export default function Daily() {
             return (
               <button
                 key={key}
-                onClick={() => setViewDate(key)}
+                onClick={() => { setViewDate(key); setMustView('day'); }}
                 aria-label={`${key}，${status === 'done' ? '全部完成' : status === 'partial' ? '部分完成' : status === 'miss' ? '未完成' : status === 'planned' ? '已预打卡' : status === 'future' ? '待预打卡' : '无安排'}`}
                 aria-pressed={isViewing}
                 className={cn(
@@ -239,27 +266,32 @@ export default function Daily() {
         </div>
       </div>
 
-      {/* --------------------------- 当天完成情况 --------------------------- */}
+      {/* --------------------------- 周期必做 --------------------------- */}
       <div className="card flex h-[300px] flex-col overflow-hidden p-3 sm:h-[330px] sm:p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 className="font-semibold">{isToday ? '今天的必做' : `${viewDate} 的必做`}</h2>
+            <h2 className="font-semibold">周期必做</h2>
             <p className="text-xs text-slate-400">
-              {isFutureView ? '已预打卡' : '已完成'} {viewDone}/{viewDue.length}
+              {mustRangeText} · 已完成 {viewDone}/{mustOccurrences.length}
               {!isToday && <button className="ml-2 text-indigo-600 hover:underline dark:text-indigo-400" onClick={() => setViewDate(today)}>回到今天</button>}
             </p>
           </div>
-          <span className="chip bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"><Repeat2 size={13} /> 周期任务</span>
+          <div className="flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800" role="group" aria-label="周期必做范围">
+            {([['day', '本日'], ['week', '本周'], ['month', '本月']] as Array<[MustView, string]>).map(([value, label]) => <button key={value} onClick={() => setMustView(value)} aria-pressed={mustView === value} className={cn('rounded-lg px-3 py-1.5 text-xs transition', mustView === value ? 'bg-white font-medium text-indigo-600 shadow-sm dark:bg-slate-950 dark:text-indigo-400' : 'text-slate-500')}>{label}</button>)}
+          </div>
         </div>
-        {viewDue.length === 0 ? <Empty icon={Repeat2} text={isToday ? '今天没有周期任务' : '这一天没有安排周期任务'} action={<button className="btn-primary mt-2" onClick={() => titleRef.current?.focus()}><Plus size={15} />新增周期任务</button>} /> : (
+        {mustOccurrences.length === 0 ? <Empty icon={Repeat2} text={mustView === 'week' ? '这一周没有每周必做' : mustView === 'month' ? '这一月没有每月必做' : isToday ? '今天没有周期任务' : '这一天没有安排周期任务'} action={<button className="btn-primary mt-2" onClick={() => titleRef.current?.focus()}><Plus size={15} />新增周期任务</button>} /> : (
           <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-            {viewDue.map((task) => {
-              const done = task.completedDates.includes(viewDate);
-              return <li key={task.id}>
-                <button onClick={() => toggleDate(task.id, viewDate)} className={cn('flex w-full items-center gap-3 rounded-lg border p-3 text-left transition', done && isFutureView ? 'border-sky-200 bg-sky-50/70 dark:border-sky-500/30 dark:bg-sky-500/10' : done ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60')}>
-                  {done ? <CheckCircle2 className={isFutureView ? 'text-sky-600' : 'text-emerald-600'} size={20} /> : <Circle className="text-slate-400" size={20} />}
-                  <span className={cn('min-w-0 flex-1', done && !isFutureView && 'text-slate-400 line-through')}><span className="block truncate text-sm font-medium">{task.title}</span>{task.note && <span className="block truncate text-xs text-slate-400">{task.note}</span>}</span>
-                  {!isToday && <span className={cn('chip text-[10px]', isFutureView ? 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800')}>{isFutureView ? done ? '已预打卡' : '预打卡' : '补打卡'}</span>}
+            {mustOccurrences.map(({ task, key }) => {
+              const done = task.completedDates.includes(key);
+              const isFuture = key > today;
+              const isOccurrenceToday = key === today;
+              return <li key={`${task.id}:${key}`}>
+                <button onClick={() => toggleDate(task.id, key)} className={cn('flex w-full items-center gap-3 rounded-lg border p-3 text-left transition', done && isFuture ? 'border-sky-200 bg-sky-50/70 dark:border-sky-500/30 dark:bg-sky-500/10' : done ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60')}>
+                  {done ? <CheckCircle2 className={isFuture ? 'text-sky-600' : 'text-emerald-600'} size={20} /> : <Circle className="text-slate-400" size={20} />}
+                  <span className={cn('min-w-0 flex-1', done && !isFuture && 'text-slate-400 line-through')}><span className="block truncate text-sm font-medium">{task.title}</span>{task.note && <span className="block truncate text-xs text-slate-400">{task.note}</span>}</span>
+                  {mustView !== 'day' && <span className="chip shrink-0 bg-slate-100 text-[10px] text-slate-500 dark:bg-slate-800">{key.slice(5)}</span>}
+                  {!isOccurrenceToday && <span className={cn('chip shrink-0 text-[10px]', isFuture ? 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800')}>{isFuture ? done ? '已预打卡' : '预打卡' : '补打卡'}</span>}
                 </button>
               </li>;
             })}
