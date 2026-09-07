@@ -13,6 +13,7 @@ import Tools from '@/pages/Tools';
 import SettingsPage from '@/pages/SettingsPage';
 import Daily from '@/pages/Daily';
 import LongTermGoals from '@/pages/LongTermGoals';
+import Statistics from '@/pages/Statistics';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/pomodoro" element={<Pomodoro />} />
+            <Route path="/statistics" element={<Statistics />} />
             <Route path="/todos" element={<Todos />} />
             <Route path="/daily" element={<Daily />} />
             <Route path="/goals" element={<LongTermGoals />} />

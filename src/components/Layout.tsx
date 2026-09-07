@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   CalendarDays,
+  BarChart3,
   FileText,
   LayoutDashboard,
   ListChecks,
@@ -29,10 +30,11 @@ const NAV: NavItem[] = [
   { to: '/', label: '概览', icon: LayoutDashboard },
   { to: '/calendar', label: '日历', icon: CalendarDays },
   { to: '/todos', label: '待办事项', icon: ListChecks },
-  { to: '/daily', label: '每日必做', icon: Repeat2 },
+  { to: '/daily', label: '周期任务', icon: Repeat2 },
   { to: '/goals', label: '长期目标', icon: Target },
   { to: '/notes', label: '备忘录', icon: NotebookPen },
   { to: '/pomodoro', label: '番茄时钟', icon: Timer },
+  { to: '/statistics', label: '数据统计', icon: BarChart3 },
   { to: '/weekly', label: 'AI 周报', icon: FileText },
   // 「小工具」功能保留但暂时不在主导航露出，避免新用户觉得是个半成品页面
   // { to: '/tools', label: '小工具', icon: Wrench },

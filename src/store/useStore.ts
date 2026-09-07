@@ -17,9 +17,10 @@ export interface TodoList { id: string; name: string; updatedAt: number }
 export interface Note { id: string; title: string; content: string; pinned: boolean; createdAt: number; updatedAt: number }
 export type PomodoroMode = 'focus' | 'short' | 'long';
 export interface PomodoroSession { id: string; mode: PomodoroMode; minutes: number; task: string; endedAt: number; updatedAt: number }
-export interface PomodoroTimer { mode: PomodoroMode; remaining: number; endAt: number | null; completedEndAt?: number; round: number; task: string }
+export interface PomodoroTimer { mode: PomodoroMode; remaining: number; endAt: number | null; completedEndAt?: number; alarmAt?: number; round: number; task: string }
 export interface PomodoroCompletion { mode: PomodoroMode; task: string; nextMode: PomodoroMode; nextSeconds: number; sound: boolean }
-export interface DailyTask { id: string; title: string; note: string; daysOfWeek: number[]; completedDates: string[]; enabled: boolean; createdAt: number; updatedAt: number }
+export type PeriodicFrequency = 'daily' | 'weekly' | 'monthly';
+export interface DailyTask { id: string; title: string; note: string; frequency: PeriodicFrequency; startDate: string; daysOfWeek: number[]; dayOfMonth?: number; completedDates: string[]; enabled: boolean; createdAt: number; updatedAt: number }
 export interface GoalTask { id: string; title: string; parentId?: string; done: boolean; completedAt?: number; order: number; createdAt: number }
 export interface LongTermGoal { id: string; title: string; tasks: GoalTask[]; order: number; createdAt: number; updatedAt: number }
 export interface Settings {
@@ -42,7 +43,7 @@ interface State extends Omit<WorkspaceSnapshot, 'lastPulledAt' | 'lastSyncAt'> {
   addNote: () => string; updateNote: (id: string, patch: Partial<Note>) => void; removeNote: (id: string) => void;
   addSession: (s: Omit<PomodoroSession, 'id' | 'updatedAt'>) => void; updateSession: (id: string, task: string) => void; removeSession: (id: string) => void; clearSessions: (dateKey?: string) => void;
   updateTimer: (patch: Partial<PomodoroTimer>) => void; completeTimer: (expectedEndAt: number) => PomodoroCompletion | null;
-  addDailyTask: (t: Pick<DailyTask, 'title' | 'note' | 'daysOfWeek'>) => string; updateDailyTask: (id: string, patch: Partial<DailyTask>) => void; removeDailyTask: (id: string) => void; toggleDailyTaskDate: (id: string, date: string) => void;
+  addDailyTask: (t: Pick<DailyTask, 'title' | 'note' | 'frequency' | 'startDate' | 'daysOfWeek' | 'dayOfMonth'>) => string; updateDailyTask: (id: string, patch: Partial<DailyTask>) => void; removeDailyTask: (id: string) => void; toggleDailyTaskDate: (id: string, date: string) => void;
   addGoal: (title: string) => string; renameGoal: (id: string, title: string) => void; removeGoal: (id: string) => void; moveGoal: (id: string, toIndex: number) => void;
   addGoalTask: (goalId: string, title: string, parentId?: string) => string; updateGoalTask: (goalId: string, taskId: string, title: string) => void; removeGoalTask: (goalId: string, taskId: string) => void; toggleGoalTask: (goalId: string, taskId: string) => void; moveGoalTask: (goalId: string, taskId: string, targetId: string) => void;
   updateSettings: (patch: Partial<Settings>) => void; applyRemote: (table: SyncTable, rows: SyncRecord[]) => number; removeRemote: (table: SyncTable, ids: string[]) => void;
@@ -58,6 +59,20 @@ function dropDirty(dirty: Record<string, 1>, table: SyncTable, id: string) { con
 function dropDirtyMany(dirty: Record<string, 1>, table: SyncTable, ids: string[]) { const next = { ...dirty }; ids.forEach((id) => delete next[syncKey(table, id)]); return next; }
 function tombstoneOf(table: SyncTable, record: unknown, at: number): Tombstone { return { table, id: (record as { id: string }).id, deletedAt: at, updatedAt: at, snapshot: record as Record<string, unknown> }; }
 function pushTombstone(list: Tombstone[], t: Tombstone) { return [...list.filter((x) => !(x.table === t.table && x.id === t.id)), t]; }
+function normalizeDailyTask(task: DailyTask): DailyTask {
+  const daysOfWeek = Array.isArray(task.daysOfWeek) && task.daysOfWeek.length ? task.daysOfWeek : [0, 1, 2, 3, 4, 5, 6];
+  const createdAt = Number.isFinite(task.createdAt) ? task.createdAt : Date.now();
+  const frequency: PeriodicFrequency = task.frequency ?? (daysOfWeek.length === 7 ? 'daily' : 'weekly');
+  return {
+    ...task,
+    frequency,
+    startDate: task.startDate || toKey(new Date(createdAt)),
+    daysOfWeek,
+    dayOfMonth: task.dayOfMonth ?? new Date(createdAt).getDate(),
+    completedDates: Array.isArray(task.completedDates) ? task.completedDates : [],
+    enabled: task.enabled ?? true,
+  };
+}
 
 export const defaultSettings: Settings = {
   theme: 'light', focusMin: 25, shortMin: 5, longMin: 15, longEvery: 4, longBreakEnabled: true, autoNext: false, sound: true,
@@ -177,6 +192,7 @@ export const useStore = create<State>()(persist((set, get) => ({
           remaining: nextSeconds,
           endAt: s.settings.autoNext ? now + nextSeconds * 1000 : null,
           completedEndAt: expectedEndAt,
+          alarmAt: s.settings.sound ? expectedEndAt : undefined,
           round: timer.mode === 'focus' ? timer.round + 1 : timer.round,
         },
       };
@@ -248,7 +264,7 @@ export const useStore = create<State>()(persist((set, get) => ({
   }),
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 
-  applyRemote: (table, rows) => { let changed = 0; set((s) => { const local = s[table] as Array<{ id: string; updatedAt: number }>, next = [...local]; let dirty = s.dirty; for (const incoming of rows as Array<{ id: string; updatedAt: number }>) { const tomb = s.tombstones.find((t) => t.table === table && t.id === incoming.id); if (tomb && tomb.updatedAt >= incoming.updatedAt) continue; const idx = next.findIndex((r) => r.id === incoming.id); if (idx === -1) { next.push(incoming); changed++; } else if ((next[idx].updatedAt ?? 0) < incoming.updatedAt) { next[idx] = incoming; dirty = dropDirty(dirty, table, incoming.id); changed++; } } return changed ? ({ [table]: next, dirty } as Partial<State>) : s; }); return changed; },
+  applyRemote: (table, rows) => { let changed = 0; set((s) => { const local = s[table] as Array<{ id: string; updatedAt: number }>, next = [...local]; let dirty = s.dirty; for (const rawIncoming of rows as Array<{ id: string; updatedAt: number }>) { const incoming = table === 'daily_tasks' ? normalizeDailyTask(rawIncoming as DailyTask) : rawIncoming; const tomb = s.tombstones.find((t) => t.table === table && t.id === incoming.id); if (tomb && tomb.updatedAt >= incoming.updatedAt) continue; const idx = next.findIndex((r) => r.id === incoming.id); if (idx === -1) { next.push(incoming); changed++; } else if ((next[idx].updatedAt ?? 0) < incoming.updatedAt) { next[idx] = incoming; dirty = dropDirty(dirty, table, incoming.id); changed++; } } return changed ? ({ [table]: next, dirty } as Partial<State>) : s; }); return changed; },
   removeRemote: (table, ids) => set((s) => { const setIds = new Set(ids), local = s[table] as Array<{ id: string }>; return { [table]: local.filter((r) => !setIds.has(r.id)), tombstones: s.tombstones.filter((t) => !(t.table === table && setIds.has(t.id))), dirty: dropDirtyMany(s.dirty, table, ids) } as Partial<State>; }),
   takeTombstones: () => { const list = get().tombstones; if (list.length) set({ tombstones: [] }); return list; },
   restore: (items) => set((s) => {
@@ -293,7 +309,7 @@ export const useStore = create<State>()(persist((set, get) => ({
         lists: Array.isArray(data.lists) && data.lists.length ? stamp<TodoList>(data.lists, 2000) : blankWorkspace().lists,
         notes: stamp<Note>(data.notes, 3000),
         sessions: stamp<PomodoroSession>(data.sessions, 4000),
-        daily_tasks: stamp<DailyTask>(data.daily_tasks, 5000),
+        daily_tasks: stamp<DailyTask>(data.daily_tasks, 5000).map(normalizeDailyTask),
         goals: stamp<LongTermGoal>(data.goals, 6000).map((g, index) => ({ ...g, tasks: Array.isArray(g.tasks) ? g.tasks.map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) : [], order: Number.isFinite(g.order) ? g.order : index })),
       };
       // Key 永远留在本机，不随备份文件迁移
@@ -340,14 +356,14 @@ export const useStore = create<State>()(persist((set, get) => ({
     return { ...blank, settings: { ...blank.settings, theme: s.settings.theme, aiEndpoint: s.settings.aiEndpoint, aiModel: s.settings.aiModel, aiApiKey: s.settings.aiApiKey }, tombstones, sync: { ...s.sync } };
   }),
 }), {
-  name: 'work-assistant-v1', version: 7,
+  name: 'work-assistant-v1', version: 8,
   migrate: (persisted) => {
     const s = (persisted ?? {}) as Partial<State>, now = Date.now();
     const stamp = <T extends { updatedAt?: number }>(arr: T[] | undefined, offset = 0) => (Array.isArray(arr) ? arr : []).map((r, i) => ({ ...r, updatedAt: r.updatedAt ?? now + offset + i }));
-    const events = stamp(s.events) as CalEvent[], todos = stamp(s.todos, 1000).map((t) => ({ ...t, priority: t.priority ?? 3 })) as Todo[], lists = stamp(s.lists, 2000) as TodoList[], notes = stamp(s.notes, 3000) as Note[], sessions = stamp(s.sessions, 4000) as PomodoroSession[], daily_tasks = stamp(s.daily_tasks, 5000).map((t) => ({ ...t, daysOfWeek: t.daysOfWeek ?? [0,1,2,3,4,5,6], completedDates: t.completedDates ?? [], enabled: t.enabled ?? true })) as DailyTask[], goals = stamp(s.goals, 6000).map((g, index) => ({ ...g, tasks: Array.isArray(g.tasks) ? g.tasks.map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) : [], order: Number.isFinite((g as LongTermGoal).order) ? (g as LongTermGoal).order : index })) as LongTermGoal[];
+    const events = stamp(s.events) as CalEvent[], todos = stamp(s.todos, 1000).map((t) => ({ ...t, priority: t.priority ?? 3 })) as Todo[], lists = stamp(s.lists, 2000) as TodoList[], notes = stamp(s.notes, 3000) as Note[], sessions = stamp(s.sessions, 4000) as PomodoroSession[], daily_tasks = (stamp(s.daily_tasks, 5000) as DailyTask[]).map(normalizeDailyTask), goals = stamp(s.goals, 6000).map((g, index) => ({ ...g, tasks: Array.isArray(g.tasks) ? g.tasks.map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) : [], order: Number.isFinite((g as LongTermGoal).order) ? (g as LongTermGoal).order : index })) as LongTermGoal[];
     const dirty: Record<string, 1> = { ...(s.dirty ?? {}) }, collections: Record<SyncTable, Array<{ id: string }>> = { events, todos, lists, notes, sessions, daily_tasks, goals };
     SYNC_TABLES.forEach((table) => collections[table].forEach((r) => { dirty[syncKey(table, r.id)] = 1; }));
-    const workspaces = Object.fromEntries(Object.entries(s.workspaces ?? {}).map(([key, workspace]) => [key, { ...workspace, goals: (workspace.goals ?? []).map((goal, index) => ({ ...goal, order: Number.isFinite(goal.order) ? goal.order : index, tasks: (goal.tasks ?? []).map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) })), timer: workspace.timer ?? defaultTimer() }]));
+    const workspaces = Object.fromEntries(Object.entries(s.workspaces ?? {}).map(([key, workspace]) => [key, { ...workspace, daily_tasks: (workspace.daily_tasks ?? []).map(normalizeDailyTask), goals: (workspace.goals ?? []).map((goal, index) => ({ ...goal, order: Number.isFinite(goal.order) ? goal.order : index, tasks: (goal.tasks ?? []).map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) })), timer: workspace.timer ?? defaultTimer() }]));
     return { ...s, events, todos, lists: lists.length ? lists : blankWorkspace().lists, notes, sessions, daily_tasks, goals, timer: s.timer ?? defaultTimer(), dirty, tombstones: Array.isArray(s.tombstones) ? s.tombstones : [], settings: { ...defaultSettings, ...(s.settings ?? {}) }, workspaceKey: s.workspaceKey ?? GUEST_WORKSPACE, workspaces, sync: { ...defaultSync, ...(s.sync ?? {}) } } as State;
   },
 }));

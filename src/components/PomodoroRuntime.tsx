@@ -1,14 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { VolumeX } from 'lucide-react';
 import { notify, playTimerAlarm, stopTimerAlarm } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
 
-const STOP_ALARM_EVENT = 'work-assistant:stop-timer-alarm';
-
 /** 在任何页面都能停止计时结束提示音。 */
 export function stopGlobalTimerAlarm() {
   stopTimerAlarm();
-  window.dispatchEvent(new Event(STOP_ALARM_EVENT));
+  useStore.getState().updateTimer({ alarmAt: undefined });
 }
 
 /**
@@ -17,21 +15,15 @@ export function stopGlobalTimerAlarm() {
  */
 export default function PomodoroRuntime() {
   const endAt = useStore((state) => state.timer.endAt);
+  const alarmAt = useStore((state) => state.timer.alarmAt);
   const completeTimer = useStore((state) => state.completeTimer);
-  const [alarmPlaying, setAlarmPlaying] = useState(false);
-
-  useEffect(() => {
-    const stop = () => setAlarmPlaying(false);
-    window.addEventListener(STOP_ALARM_EVENT, stop);
-    return () => window.removeEventListener(STOP_ALARM_EVENT, stop);
-  }, []);
 
   useEffect(() => {
     if (endAt === null) return;
     const finish = () => {
       const completed = completeTimer(endAt);
       if (!completed) return;
-      if (completed.sound && playTimerAlarm()) setAlarmPlaying(true);
+      if (completed.sound) playTimerAlarm();
       notify(
         completed.mode === 'focus' ? '专注结束，休息一下' : '休息结束，开始专注',
         completed.task || undefined,
@@ -41,7 +33,7 @@ export default function PomodoroRuntime() {
     return () => window.clearTimeout(timeout);
   }, [endAt, completeTimer]);
 
-  if (!alarmPlaying) return null;
+  if (!alarmAt) return null;
   return (
     <button
       className="btn-primary fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 shadow-lg"

@@ -89,7 +89,9 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
   const [taskTitle, setTaskTitle] = useState('');
   const [childFor, setChildFor] = useState<string | null>(null);
   const [childTitle, setChildTitle] = useState('');
-  const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(() => new Set());
+  const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(
+    () => new Set(goal.tasks.flatMap((task) => task.parentId ? [task.parentId] : [])),
+  );
   const [completedOpen, setCompletedOpen] = useState(false);
 
   const roots = useMemo(() => goal.tasks

@@ -12,8 +12,9 @@ import {
   Trash2,
 } from 'lucide-react';
 import { addDays, monthGrid, startOfWeek, toKey, todayKey } from '@/lib/date';
+import { PERIODIC_FREQUENCY_LABELS, periodicFrequencyOf, periodicScheduleText, periodicTaskDueOn } from '@/lib/periodic';
 import { cn } from '@/lib/utils';
-import { useStore } from '@/store/useStore';
+import { useStore, type PeriodicFrequency } from '@/store/useStore';
 import { useDeletable } from '@/hooks/useDeletable';
 import { Empty, SectionTitle } from '@/components/ui';
 
@@ -48,6 +49,9 @@ export default function Daily() {
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
   const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [frequency, setFrequency] = useState<PeriodicFrequency>('daily');
+  const [startDate, setStartDate] = useState(todayKey());
+  const [dayOfMonth, setDayOfMonth] = useState(new Date().getDate());
   const titleRef = useRef<HTMLInputElement>(null);
   const today = todayKey();
   /** 当前正在查看哪一天，支持回看历史并补打卡 */
@@ -57,8 +61,7 @@ export default function Daily() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
-  const weekdayOf = (key: string) => new Date(`${key}T12:00:00`).getDay();
-  const tasksDueOn = (key: string) => tasks.filter((t) => t.enabled && t.daysOfWeek.includes(weekdayOf(key)));
+  const tasksDueOn = (key: string) => tasks.filter((task) => periodicTaskDueOn(task, key));
   const doneOf = (key: string) => tasksDueOn(key).filter((t) => t.completedDates.includes(key)).length;
   const statusOf = (key: string): DayStatus => {
     const due = tasksDueOn(key);
@@ -117,8 +120,15 @@ export default function Daily() {
   /* ------------------------------ 交互 ------------------------------ */
 
   const submit = () => {
-    if (!title.trim() || !days.length) return;
-    addTask({ title: title.trim(), note: note.trim(), daysOfWeek: [...days].sort() });
+    if (!title.trim() || !startDate || (frequency === 'weekly' && !days.length)) return;
+    addTask({
+      title: title.trim(),
+      note: note.trim(),
+      frequency,
+      startDate,
+      daysOfWeek: frequency === 'weekly' ? [...days].sort() : [],
+      dayOfMonth: frequency === 'monthly' ? dayOfMonth : undefined,
+    });
     setTitle('');
     setNote('');
   };
@@ -169,7 +179,7 @@ export default function Daily() {
       <div className="card p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <SectionTitle>
-            <span className="flex items-center gap-1.5">打卡日历 · {year} 年 {month + 1} 月</span>
+            <span className="flex items-center gap-1.5">周期任务日历 · {year} 年 {month + 1} 月</span>
           </SectionTitle>
           <div className="flex items-center gap-1">
             <button className="btn-ghost px-1.5" onClick={() => setCursor(new Date(year, month - 1, 1))} aria-label="上个月">
@@ -256,26 +266,32 @@ export default function Daily() {
       {/* ---------------------------- 新增与列表 ---------------------------- */}
       <div className="card p-3 sm:p-4">
         <SectionTitle>新增周期任务</SectionTitle>
-        <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+        <div className="mb-3 flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+          {(Object.entries(PERIODIC_FREQUENCY_LABELS) as Array<[PeriodicFrequency, string]>).map(([value, label]) => <button key={value} onClick={() => setFrequency(value)} className={cn('rounded-lg px-3 py-1.5 text-sm transition', frequency === value ? 'bg-white font-medium text-indigo-600 shadow-sm dark:bg-slate-950 dark:text-indigo-400' : 'text-slate-500')}>{label}</button>)}
+        </div>
+        <div className="grid gap-2 md:grid-cols-[1fr_1fr_150px_auto]">
           <input ref={titleRef} className="input" placeholder="例如：阅读 30 分钟" aria-label="任务名称" value={title} onChange={(e) => setTitle(e.target.value)} />
           <input className="input" placeholder="备注（可选）" aria-label="任务备注" value={note} onChange={(e) => setNote(e.target.value)} />
-          <button className="btn-primary" disabled={!title.trim() || !days.length} onClick={submit}><Plus size={15} />添加</button>
+          <input type="date" className="input" aria-label="任务开始日期" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          <button className="btn-primary" disabled={!title.trim() || !startDate || (frequency === 'weekly' && !days.length)} onClick={submit}><Plus size={15} />添加</button>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        {frequency === 'daily' && <p className="mt-3 text-xs text-slate-400">从开始日期起，每一天都会生成这项必做任务。</p>}
+        {frequency === 'weekly' && <div className="mt-3 flex flex-wrap items-center gap-2">
           {PRESETS.map((p) => <button key={p.label} className="btn-outline py-1 text-xs" onClick={() => setDays(p.days)}>{p.label}</button>)}
           <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
           {DAYS.map((d, i) => <button key={d} aria-label={`星期${d}`} aria-pressed={days.includes(i)} onClick={() => setDays((v) => v.includes(i) ? v.filter((x) => x !== i) : [...v, i])} className={cn('h-8 w-8 rounded-full text-xs font-medium', days.includes(i) ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800')}>{d}</button>)}
-        </div>
+        </div>}
+        {frequency === 'monthly' && <label className="mt-3 flex items-center gap-2 text-sm"><span>每月执行日期</span><input type="number" min={1} max={31} className="input w-24" value={dayOfMonth} onChange={(event) => setDayOfMonth(Math.min(31, Math.max(1, Number(event.target.value) || 1)))} /><span className="text-xs text-slate-400">日；月份天数不足时在月末执行</span></label>}
       </div>
 
       <div className="card p-4">
         <SectionTitle>全部周期任务 · {tasks.length}</SectionTitle>
-        {tasks.length === 0 ? <Empty icon={Repeat2} text="还没有每日必做任务" action={<button className="btn-primary mt-2" onClick={() => titleRef.current?.focus()}><Plus size={15} />新增周期任务</button>} /> : (
+        {tasks.length === 0 ? <Empty icon={Repeat2} text="还没有周期任务" action={<button className="btn-primary mt-2" onClick={() => titleRef.current?.focus()}><Plus size={15} />新增周期任务</button>} /> : (
           <ul className="max-h-[310px] overflow-y-auto divide-y divide-slate-100 pr-1 dark:divide-slate-800">
             {tasks.map((task) => <li key={task.id} className="flex items-center gap-3 py-3">
               <span className={cn('min-w-0 flex-1', !task.enabled && 'opacity-50')}>
-                <span className="block truncate text-sm font-medium">{task.title}</span>
-                <span className="text-xs text-slate-400">{task.daysOfWeek.length === 7 ? '每天' : task.daysOfWeek.map((d) => `周${DAYS[d]}`).join('、')}</span>
+                <span className="flex items-center gap-2"><span className="truncate text-sm font-medium">{task.title}</span><span className="chip shrink-0 bg-indigo-50 text-[10px] text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{PERIODIC_FREQUENCY_LABELS[periodicFrequencyOf(task)]}</span></span>
+                <span className="text-xs text-slate-400">{periodicScheduleText(task, DAYS)}</span>
               </span>
               <button className="btn-ghost px-2" title={task.enabled ? '暂停' : '启用'} onClick={() => updateTask(task.id, { enabled: !task.enabled })}>{task.enabled ? <Pause size={15} /> : <Play size={15} />}</button>
               <button className="btn-danger px-2" title="删除" onClick={() => deletable(`已删除「${task.title || '周期任务'}」`, () => removeTask(task.id))}><Trash2 size={15} /></button>

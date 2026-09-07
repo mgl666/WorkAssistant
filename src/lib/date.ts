@@ -47,11 +47,6 @@ export function isSameMonth(d: Date, year: number, month: number): boolean {
   return d.getFullYear() === year && d.getMonth() === month;
 }
 
-export function isWeekend(d: Date): boolean {
-  const day = d.getDay();
-  return day === 0 || day === 6;
-}
-
 export function diffDays(keyA: string, keyB: string): number {
   const a = fromKey(keyA).getTime();
   const b = fromKey(keyB).getTime();

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { cn, prepareTimerSound, requestNotifyPermission } from '@/lib/utils';
 import { stopGlobalTimerAlarm } from '@/components/PomodoroRuntime';
-import { formatClock, formatCountdown, formatMinutes, startOfWeek, todayKey, toKey } from '@/lib/date';
+import { formatClock, formatCountdown, formatMinutes, todayKey, toKey } from '@/lib/date';
 import { useStore, type PomodoroMode, type PomodoroSession, type Settings } from '@/store/useStore';
 import { useDeletable } from '@/hooks/useDeletable';
 import { SectionTitle } from '@/components/ui';
@@ -25,7 +25,6 @@ const MODE_META: Record<PomodoroMode, { label: string; ring: string; text: strin
 
 const R = 88;
 const C = 2 * Math.PI * R;
-type StatisticsRange = 'week' | 'month' | 'year' | 'custom';
 
 export default function Pomodoro() {
   const settings = useStore((s) => s.settings);
@@ -380,7 +379,6 @@ export default function Pomodoro() {
         </div>
       </div>
 
-      <FocusStatistics sessions={focusSessions} />
       <SessionHistory sessions={activeSessions} />
     </div>
   );
@@ -391,148 +389,10 @@ function dateFromKey(key: string) {
   return new Date(year, month - 1, day);
 }
 
-function nextDateKey(key: string) {
-  const date = dateFromKey(key);
-  date.setDate(date.getDate() + 1);
-  return toKey(date);
-}
-
 function shiftDateKey(key: string, amount: number) {
   const date = dateFromKey(key);
   date.setDate(date.getDate() + amount);
   return toKey(date);
-}
-
-function FocusStatistics({ sessions }: { sessions: PomodoroSession[] }) {
-  const today = todayKey();
-  const now = new Date();
-  const weekStart = toKey(startOfWeek(now));
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-  const yearStart = `${now.getFullYear()}-01-01`;
-  const [range, setRange] = useState<StatisticsRange>('week');
-  const [customStart, setCustomStart] = useState(weekStart);
-  const [customEnd, setCustomEnd] = useState(today);
-
-  const { start, end } = useMemo(() => {
-    if (range === 'week') return { start: weekStart, end: today };
-    if (range === 'month') return { start: monthStart, end: today };
-    if (range === 'year') return { start: yearStart, end: today };
-    return customStart <= customEnd
-      ? { start: customStart, end: customEnd }
-      : { start: customEnd, end: customStart };
-  }, [range, weekStart, monthStart, yearStart, today, customStart, customEnd]);
-
-  const selected = useMemo(() => sessions.filter((session) => {
-    const key = toKey(new Date(session.endedAt));
-    return key >= start && key <= end;
-  }), [sessions, start, end]);
-
-  const daySpan = Math.max(1, Math.round((dateFromKey(end).getTime() - dateFromKey(start).getTime()) / 86400000) + 1);
-  const groupByMonth = range === 'year' || (range === 'custom' && daySpan > 90);
-  const rows = useMemo(() => {
-    const buckets = new Map<string, PomodoroSession[]>();
-    for (const session of selected) {
-      const dateKey = toKey(new Date(session.endedAt));
-      const key = groupByMonth ? dateKey.slice(0, 7) : dateKey;
-      buckets.set(key, [...(buckets.get(key) ?? []), session]);
-    }
-
-    const keys: string[] = [];
-    if (groupByMonth) {
-      let cursor = dateFromKey(`${start.slice(0, 7)}-01`);
-      const last = dateFromKey(`${end.slice(0, 7)}-01`);
-      while (cursor <= last) {
-        keys.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`);
-        cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
-      }
-    } else {
-      let cursor = start;
-      while (cursor <= end) {
-        keys.push(cursor);
-        cursor = nextDateKey(cursor);
-      }
-    }
-
-    return keys.map((key) => {
-      const records = buckets.get(key) ?? [];
-      const minutes = records.reduce((sum, session) => sum + session.minutes, 0);
-      return { key, count: records.length, minutes, average: records.length ? Math.round(minutes / records.length) : 0 };
-    });
-  }, [selected, start, end, groupByMonth]);
-
-  const totalMinutes = selected.reduce((sum, session) => sum + session.minutes, 0);
-  const activeDays = new Set(selected.map((session) => toKey(new Date(session.endedAt)))).size;
-  const rangeOptions: Array<{ value: StatisticsRange; label: string }> = [
-    { value: 'week', label: '本周' },
-    { value: 'month', label: '本月' },
-    { value: 'year', label: '本年' },
-    { value: 'custom', label: '自定义' },
-  ];
-
-  return (
-    <section className="card min-w-0 p-4 sm:p-5 lg:col-span-5">
-      <SectionTitle extra={<span className="text-xs font-normal text-slate-400">已删除记录不参与统计</span>}>专注统计表</SectionTitle>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-          {rangeOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => setRange(option.value)}
-              className={cn('rounded-lg px-3 py-1.5 text-sm transition', range === option.value ? 'bg-white font-medium text-indigo-600 shadow-sm dark:bg-slate-950 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400')}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        {range === 'custom' && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <input type="date" className="input w-auto" max={today} value={customStart} onChange={(event) => setCustomStart(event.target.value || today)} aria-label="统计开始日期" />
-            <span className="text-slate-400">至</span>
-            <input type="date" className="input w-auto" max={today} value={customEnd} onChange={(event) => setCustomEnd(event.target.value || today)} aria-label="统计结束日期" />
-          </div>
-        )}
-      </div>
-
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
-        <div className="rounded-xl bg-indigo-50 p-3 text-center dark:bg-indigo-500/10">
-          <div className="text-lg font-semibold text-indigo-700 dark:text-indigo-300 sm:text-xl">{selected.length}</div>
-          <div className="text-xs text-slate-500">专注次数</div>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/60">
-          <div className="text-lg font-semibold sm:text-xl">{formatMinutes(totalMinutes)}</div>
-          <div className="text-xs text-slate-500">专注时长</div>
-        </div>
-        <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/60">
-          <div className="text-lg font-semibold sm:text-xl">{activeDays}</div>
-          <div className="text-xs text-slate-500">专注天数</div>
-        </div>
-      </div>
-
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
-        <table className="w-full min-w-[520px] text-left text-sm">
-          <thead className="bg-slate-50 text-xs text-slate-500 dark:bg-slate-800/70 dark:text-slate-400">
-            <tr>
-              <th className="px-4 py-2.5 font-medium">{groupByMonth ? '月份' : '日期'}</th>
-              <th className="px-4 py-2.5 text-right font-medium">专注次数</th>
-              <th className="px-4 py-2.5 text-right font-medium">专注时长</th>
-              <th className="px-4 py-2.5 text-right font-medium">平均每次</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {rows.map((row) => (
-              <tr key={row.key} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40">
-                <td className="px-4 py-2.5 font-medium">{groupByMonth ? `${row.key.slice(0, 4)} 年 ${Number(row.key.slice(5))} 月` : row.key}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{row.count}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{formatMinutes(row.minutes)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-slate-500">{row.count ? formatMinutes(row.average) : '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {groupByMonth && range === 'custom' && <p className="mt-2 text-xs text-slate-400">自定义时间超过 90 天，统计表将按月汇总。</p>}
-    </section>
-  );
 }
 
 function SessionHistory({ sessions }: { sessions: PomodoroSession[] }) {

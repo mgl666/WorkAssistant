@@ -133,7 +133,7 @@ export default function SettingsPage() {
         ['清单', (data.lists as unknown[] | undefined)?.length ?? 0],
         ['备忘录', (data.notes as unknown[] | undefined)?.length ?? 0],
         ['番茄记录', (data.sessions as unknown[] | undefined)?.length ?? 0],
-        ['每日必做', (data.daily_tasks as unknown[] | undefined)?.length ?? 0],
+        ['周期任务', (data.daily_tasks as unknown[] | undefined)?.length ?? 0],
         ['长期目标', (data.goals as unknown[] | undefined)?.length ?? 0],
       ];
       if (!counts.some(([, n]) => n > 0)) {
@@ -424,7 +424,7 @@ export default function SettingsPage() {
         }
       >
         <p className="text-sm text-slate-600 dark:text-slate-300">
-          当前账号的日程、待办、每日必做、长期目标、备忘录与番茄记录都会被删除。建议先导出备份。
+          当前账号的日程、待办、周期任务、长期目标、备忘录与番茄记录都会被删除。建议先导出备份。
         </p>
       </Modal>
     </div>
