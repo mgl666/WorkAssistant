@@ -92,6 +92,7 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
   const [taskTitle, setTaskTitle] = useState('');
   const [childFor, setChildFor] = useState<string | null>(null);
   const [childTitle, setChildTitle] = useState('');
+  const [collapsedTaskIds, setCollapsedTaskIds] = useState<Set<string>>(() => new Set());
   const [completedOpen, setCompletedOpen] = useState(false);
 
   const roots = useMemo(() => goal.tasks
@@ -109,6 +110,12 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
   const addChild = (parentId: string) => {
     if (!childTitle.trim()) return;
     store.addGoalTask(goal.id, childTitle, parentId);
+    setCollapsedTaskIds((current) => {
+      if (!current.has(parentId)) return current;
+      const next = new Set(current);
+      next.delete(parentId);
+      return next;
+    });
     setChildTitle('');
     setChildFor(null);
   };
@@ -148,6 +155,7 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
             }}
           />
         ) : <h2 className="min-w-0 flex-1 truncate text-xl font-medium text-slate-800 dark:text-slate-100">{goal.title}</h2>}
+        {!renaming && <button className="btn-ghost shrink-0 px-2" title="修改目标名称" aria-label={`修改长期目标「${goal.title}」`} onClick={() => { setMenuOpen(false); setName(goal.title); setRenaming(true); }}><Pencil size={16} /></button>}
         <div className="flex shrink-0 items-center rounded-lg border border-slate-200 p-0.5 dark:border-slate-700 sm:hidden" aria-label="调整目标顺序">
           <button
             disabled={index === 0}
@@ -195,14 +203,14 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
         {pending.length === 0 && completed.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">添加任务，开始推进这个目标</p> : (
           <>
             <ul className="space-y-1">
-              {pending.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} siblings={pending} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}
+              {pending.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} siblings={pending} collapsed={collapsedTaskIds.has(task.id)} onToggleCollapse={() => setCollapsedTaskIds((current) => { const next = new Set(current); if (next.has(task.id)) next.delete(task.id); else next.add(task.id); return next; })} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}
             </ul>
             {completed.length > 0 && (
               <section className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
                 <button className="flex w-full items-center gap-2 rounded-md py-1 text-left text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" onClick={() => setCompletedOpen((open) => !open)} aria-expanded={completedOpen}>
                   <ChevronRight size={16} className={cn('transition-transform', completedOpen && 'rotate-90')} />已完成 ({completed.length})
                 </button>
-                {completedOpen && <ul className="mt-1 space-y-1">{completed.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} siblings={completed} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}</ul>}
+                {completedOpen && <ul className="mt-1 space-y-1">{completed.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} siblings={completed} collapsed={collapsedTaskIds.has(task.id)} onToggleCollapse={() => setCollapsedTaskIds((current) => { const next = new Set(current); if (next.has(task.id)) next.delete(task.id); else next.add(task.id); return next; })} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}</ul>}
               </section>
             )}
           </>
@@ -216,6 +224,8 @@ interface GoalTaskRowProps {
   goal: LongTermGoal;
   task: GoalTask;
   siblings: GoalTask[];
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   childFor: string | null;
   childTitle: string;
   setChildFor: (id: string | null) => void;
@@ -223,7 +233,7 @@ interface GoalTaskRowProps {
   addChild: (parentId: string) => void;
 }
 
-function GoalTaskRow({ goal, task, siblings, childFor, childTitle, setChildFor, setChildTitle, addChild }: GoalTaskRowProps) {
+function GoalTaskRow({ goal, task, siblings, collapsed, onToggleCollapse, childFor, childTitle, setChildFor, setChildTitle, addChild }: GoalTaskRowProps) {
   const store = useStore();
   const toast = useToast();
   const children = goal.tasks.filter((child) => child.parentId === task.id).sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
@@ -236,18 +246,19 @@ function GoalTaskRow({ goal, task, siblings, childFor, childTitle, setChildFor, 
   return (
     <li>
       <div className="group flex min-h-10 items-center gap-3 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+        {children.length > 0 ? <button className="-mr-1 flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" onClick={onToggleCollapse} aria-expanded={!collapsed} aria-label={`${collapsed ? '展开' : '折叠'} ${task.title} 的 ${children.length} 个二级任务`} title={`${collapsed ? '展开' : '折叠'}二级任务`}><ChevronRight size={15} className={cn('transition-transform', !collapsed && 'rotate-90')} /><span className="text-[10px] tabular-nums">{children.length}</span></button> : <span className="-mr-2 h-6 w-6 shrink-0" />}
         <TaskCheck done={task.done} label={task.title} onClick={() => store.toggleGoalTask(goal.id, task.id)} />
-        <input className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', task.done && 'text-slate-400 line-through')} value={task.title} onChange={(e) => store.updateGoalTask(goal.id, task.id, e.target.value)} aria-label="长期目标任务名称" />
+        <input title="点击可直接修改任务名称" className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', task.done && 'text-slate-400 line-through')} value={task.title} onChange={(e) => store.updateGoalTask(goal.id, task.id, e.target.value)} aria-label="长期目标任务名称" />
         <TaskProgress percent={percent} />
         <TaskOrderButtons task={task} siblings={siblings} onMove={(targetId) => store.moveGoalTask(goal.id, task.id, targetId)} />
         {!task.done && <button className={cn('btn-ghost px-1.5', HOVER_ACTIONS)} title="添加二级子任务" aria-label={`为 ${task.title} 添加二级子任务`} onClick={() => { setChildFor(childFor === task.id ? null : task.id); setChildTitle(''); }}><Plus size={15} /></button>}
         <button className={cn('btn-danger px-1.5', HOVER_ACTIONS)} title="删除任务" aria-label={`删除 ${task.title}`} onClick={() => removeTask(task.id, task.title)}><Trash2 size={14} /></button>
       </div>
-      {children.length > 0 && <ul className="ml-7 space-y-0.5">{children.map((child) => (
+      {children.length > 0 && !collapsed && <ul className="ml-7 space-y-0.5">{children.map((child) => (
         <li key={child.id} className="group flex min-h-9 items-center gap-2 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
           <CornerDownRight size={14} className="shrink-0 text-slate-300 dark:text-slate-600" />
           <TaskCheck done={child.done} label={child.title} small onClick={() => store.toggleGoalTask(goal.id, child.id)} />
-          <input className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', child.done && 'text-slate-400 line-through')} value={child.title} onChange={(e) => store.updateGoalTask(goal.id, child.id, e.target.value)} aria-label="二级子任务名称" />
+          <input title="点击可直接修改任务名称" className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', child.done && 'text-slate-400 line-through')} value={child.title} onChange={(e) => store.updateGoalTask(goal.id, child.id, e.target.value)} aria-label="二级子任务名称" />
           <TaskOrderButtons task={child} siblings={children} onMove={(targetId) => store.moveGoalTask(goal.id, child.id, targetId)} />
           <button className={cn('btn-danger px-1.5', HOVER_ACTIONS)} title="删除子任务" aria-label={`删除 ${child.title}`} onClick={() => removeTask(child.id, child.title, true)}><Trash2 size={13} /></button>
         </li>
