@@ -10,8 +10,8 @@ import {
   VolumeX,
 } from 'lucide-react';
 import { cn, notify, playTimerAlarm, prepareTimerSound, requestNotifyPermission, stopTimerAlarm } from '@/lib/utils';
-import { formatClock, formatCountdown, formatMinutes, startOfWeek, todayKey } from '@/lib/date';
-import { useStore, type PomodoroMode, type Settings } from '@/store/useStore';
+import { formatClock, formatCountdown, formatMinutes, startOfWeek, todayKey, toKey } from '@/lib/date';
+import { useStore, type PomodoroMode, type PomodoroSession, type Settings } from '@/store/useStore';
 import { useDeletable } from '@/hooks/useDeletable';
 import { SectionTitle } from '@/components/ui';
 
@@ -40,6 +40,7 @@ export default function Pomodoro() {
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
   const sessions = useStore((s) => s.sessions);
+  const tombstones = useStore((s) => s.tombstones);
   const clearSessions = useStore((s) => s.clearSessions);
   const todos = useStore((s) => s.todos);
   const timer = useStore((s) => s.timer);
@@ -142,26 +143,42 @@ export default function Pomodoro() {
     if (m === mode && !running) { setRemaining(v * 60); updateTimer({ remaining: v * 60 }); }
   };
 
+  // 所有统计只基于当前仍存在的记录；待同步删除和旧备份中的 deleted 记录都不参与。
+  const activeSessions = useMemo(() => {
+    const deletedIds = new Set(tombstones.filter((item) => item.table === 'sessions').map((item) => item.id));
+    return sessions.filter((session) => !deletedIds.has(session.id) && (session as PomodoroSession & { deleted?: boolean }).deleted !== true);
+  }, [sessions, tombstones]);
+  const focusSessions = useMemo(() => activeSessions.filter((session) => session.mode === 'focus'), [activeSessions]);
   const today = todayKey();
+  const weekStartKey = toKey(startOfWeek(new Date()));
+  const currentYear = new Date().getFullYear();
   const todaySessions = useMemo(
     () =>
-      sessions
+      activeSessions
         .filter((s) => {
           const d = new Date(s.endedAt);
           const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
           return key === today;
         })
         .sort((a, b) => b.endedAt - a.endedAt),
-    [sessions, today],
+    [activeSessions, today],
   );
 
   const todayFocus = todaySessions.filter((s) => s.mode === 'focus');
   const todayMinutes = todayFocus.reduce((acc, s) => acc + s.minutes, 0);
+  const weekFocus = focusSessions.filter((session) => {
+    const key = toKey(new Date(session.endedAt));
+    return key >= weekStartKey && key <= today;
+  });
+  const weekMinutes = weekFocus.reduce((acc, session) => acc + session.minutes, 0);
+  const yearFocus = focusSessions.filter((session) => new Date(session.endedAt).getFullYear() === currentYear);
+  const yearMinutes = yearFocus.reduce((acc, session) => acc + session.minutes, 0);
+  const totalMinutes = focusSessions.reduce((acc, session) => acc + session.minutes, 0);
 
   const weekBars = useMemo(() => {
     const keys = dayKeysLast7();
     return keys.map((key) => {
-      const minutes = sessions
+      const minutes = focusSessions
         .filter((s) => {
           const d = new Date(s.endedAt);
           const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -170,7 +187,7 @@ export default function Pomodoro() {
         .reduce((acc, s) => acc + s.minutes, 0);
       return { key, minutes };
     });
-  }, [sessions]);
+  }, [focusSessions]);
 
   const maxBar = Math.max(60, ...weekBars.map((b) => b.minutes));
   const openTodos = todos.filter((t) => !t.done).slice(0, 5);
@@ -228,8 +245,8 @@ export default function Pomodoro() {
                 {task.trim() && <span className="ml-1 text-slate-400">· {task.trim()}</span>}
               </div>
               <div className="mt-2 text-xs text-slate-400">{longBreakEnabled
-                ? `本周期已完成 ${round % Math.max(1, settings.longEvery)} / ${settings.longEvery} 个专注`
-                : `已完成 ${round} 个专注`}</div>
+                ? `距离长休息 ${round % Math.max(1, settings.longEvery)} / ${settings.longEvery}`
+                : `累计专注 ${focusSessions.length} 次`}</div>
             </div>
           </div>
 
@@ -292,20 +309,25 @@ export default function Pomodoro() {
       {/* -------------------------------- 侧栏 -------------------------------- */}
       <div className="space-y-4 lg:col-span-2">
         <div className="card p-4">
-          <SectionTitle>今日统计</SectionTitle>
+          <SectionTitle>专注统计</SectionTitle>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="rounded-lg bg-slate-50 py-3 dark:bg-slate-800/60">
               <div className="text-xl font-semibold">{todayFocus.length}</div>
-              <div className="text-xs text-slate-400">番茄数</div>
+              <div className="text-xs text-slate-400">今日 · {formatMinutes(todayMinutes)}</div>
             </div>
             <div className="rounded-lg bg-slate-50 py-3 dark:bg-slate-800/60">
-              <div className="text-xl font-semibold">{formatMinutes(todayMinutes)}</div>
-              <div className="text-xs text-slate-400">专注时长</div>
+              <div className="text-xl font-semibold">{weekFocus.length}</div>
+              <div className="text-xs text-slate-400">本周 · {formatMinutes(weekMinutes)}</div>
             </div>
             <div className="rounded-lg bg-slate-50 py-3 dark:bg-slate-800/60">
-              <div className="text-xl font-semibold">{round}</div>
-              <div className="text-xs text-slate-400">本周期</div>
+              <div className="text-xl font-semibold">{yearFocus.length}</div>
+              <div className="text-xs text-slate-400">本年 · {formatMinutes(yearMinutes)}</div>
             </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800">
+            <span className="text-slate-500 dark:text-slate-400">累计专注</span>
+            <span className="font-medium">{focusSessions.length} 次 · {formatMinutes(totalMinutes)}</span>
           </div>
 
           <div className="mt-4">
