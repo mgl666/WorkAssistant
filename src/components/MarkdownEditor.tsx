@@ -44,7 +44,10 @@ export default function MarkdownEditor({ value, onChange, placeholder }: Markdow
         root: hostRef.current,
         defaultValue: value,
         // LaTeX 依赖 KaTeX，工作笔记用不上，关掉以减小分包体积
-        features: { [CrepeClass.Feature.Latex]: false },
+        features: {
+          [CrepeClass.Feature.Latex]: false,
+          [CrepeClass.Feature.BlockEdit]: false,
+        },
         featureConfigs: {
           [CrepeClass.Feature.Placeholder]: { text: placeholder ?? '开始记录…' },
         },
