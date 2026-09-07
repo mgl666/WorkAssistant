@@ -21,31 +21,80 @@ export function plainText(md: string): string {
 
 /* ------------------------------ 提示音 / 通知 ------------------------------ */
 
-export function beep(times = 2): void {
+let timerAudio: AudioContext | null = null;
+let alarmNodes: OscillatorNode[] = [];
+let alarmLoopTimer: number | null = null;
+let alarmRequest = 0;
+
+function getTimerAudio(): AudioContext | null {
   try {
     const Ctor =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctor) return;
-    const ctx = new Ctor();
-    let at = ctx.currentTime;
-    for (let i = 0; i < times; i++) {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = i % 2 === 0 ? 880 : 660;
-      gain.gain.setValueAtTime(0.0001, at);
-      gain.gain.exponentialRampToValueAtTime(0.25, at + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.35);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(at);
-      osc.stop(at + 0.4);
-      at += 0.5;
-    }
-    setTimeout(() => void ctx.close(), times * 500 + 900);
+    if (!Ctor) return null;
+    if (!timerAudio || timerAudio.state === 'closed') timerAudio = new Ctor();
+    return timerAudio;
   } catch {
-    /* 忽略音频失败 */
+    return null;
+  }
+}
+
+/** 在用户点击开始时解锁音频，避免倒计时结束后被移动端浏览器拦截。 */
+export function prepareTimerSound(): void {
+  const ctx = getTimerAudio();
+  if (ctx?.state === 'suspended') void ctx.resume().catch(() => {});
+}
+
+export function stopTimerAlarm(): void {
+  alarmRequest += 1;
+  if (alarmLoopTimer !== null) window.clearInterval(alarmLoopTimer);
+  alarmLoopTimer = null;
+  for (const node of alarmNodes) {
+    try { node.stop(); } catch { /* 已停止 */ }
+  }
+  alarmNodes = [];
+}
+
+function scheduleTimerChime(ctx: AudioContext): void {
+  const start = ctx.currentTime + 0.04;
+  const notes = [523.25, 659.25, 783.99];
+  notes.forEach((frequency, index) => {
+    const at = start + index * 0.18;
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(frequency, at);
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.14, at + 0.035);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.62);
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.onended = () => { alarmNodes = alarmNodes.filter((node) => node !== oscillator); };
+    oscillator.start(at);
+    oscillator.stop(at + 0.65);
+    alarmNodes.push(oscillator);
+  });
+}
+
+/** 柔和的三音提示会持续循环，直到用户停止铃声或开始下一段。 */
+export function playTimerAlarm(): boolean {
+  try {
+    const ctx = getTimerAudio();
+    if (!ctx) return false;
+    stopTimerAlarm();
+    const request = alarmRequest;
+    const begin = () => {
+      // 页面离开或用户已经停止时，不再启动迟到的音频 Promise。
+      if (request !== alarmRequest) return;
+      scheduleTimerChime(ctx);
+      alarmLoopTimer = window.setInterval(() => scheduleTimerChime(ctx), 1500);
+    };
+    if (ctx.state === 'running') begin();
+    else void ctx.resume().then(begin).catch(() => {});
+    return true;
+  } catch {
+    stopTimerAlarm();
+    return false;
   }
 }
 

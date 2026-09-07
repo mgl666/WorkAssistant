@@ -17,7 +17,8 @@ export interface TodoList { id: string; name: string; updatedAt: number }
 export interface Note { id: string; title: string; content: string; pinned: boolean; createdAt: number; updatedAt: number }
 export type PomodoroMode = 'focus' | 'short' | 'long';
 export interface PomodoroSession { id: string; mode: PomodoroMode; minutes: number; task: string; endedAt: number; updatedAt: number }
-export interface PomodoroTimer { mode: PomodoroMode; remaining: number; endAt: number | null; round: number; task: string }
+export interface PomodoroTimer { mode: PomodoroMode; remaining: number; endAt: number | null; completedEndAt?: number; round: number; task: string }
+export interface PomodoroCompletion { mode: PomodoroMode; task: string; nextMode: PomodoroMode; nextSeconds: number; sound: boolean }
 export interface DailyTask { id: string; title: string; note: string; daysOfWeek: number[]; completedDates: string[]; enabled: boolean; createdAt: number; updatedAt: number }
 export interface GoalTask { id: string; title: string; parentId?: string; done: boolean; completedAt?: number; createdAt: number }
 export interface LongTermGoal { id: string; title: string; tasks: GoalTask[]; createdAt: number; updatedAt: number }
@@ -40,7 +41,7 @@ interface State extends Omit<WorkspaceSnapshot, 'lastPulledAt' | 'lastSyncAt'> {
   addList: (name: string) => string; renameList: (id: string, name: string) => void; removeList: (id: string) => void;
   addNote: () => string; updateNote: (id: string, patch: Partial<Note>) => void; removeNote: (id: string) => void;
   addSession: (s: Omit<PomodoroSession, 'id' | 'updatedAt'>) => void; clearSessions: (dateKey?: string) => void;
-  updateTimer: (patch: Partial<PomodoroTimer>) => void;
+  updateTimer: (patch: Partial<PomodoroTimer>) => void; completeTimer: (expectedEndAt: number) => PomodoroCompletion | null;
   addDailyTask: (t: Pick<DailyTask, 'title' | 'note' | 'daysOfWeek'>) => string; updateDailyTask: (id: string, patch: Partial<DailyTask>) => void; removeDailyTask: (id: string) => void; toggleDailyTaskDate: (id: string, date: string) => void;
   addGoal: (title: string) => string; renameGoal: (id: string, title: string) => void; removeGoal: (id: string) => void;
   addGoalTask: (goalId: string, title: string, parentId?: string) => string; updateGoalTask: (goalId: string, taskId: string, title: string) => void; removeGoalTask: (goalId: string, taskId: string) => void; toggleGoalTask: (goalId: string, taskId: string) => void;
@@ -124,6 +125,54 @@ export const useStore = create<State>()(persist((set, get) => ({
     return { sessions: s.sessions.filter((x) => !targets.some((t) => t.id === x.id)), tombstones: targets.reduce((a, x) => pushTombstone(a, tombstoneOf('sessions', x, now)), s.tombstones), dirty: dropDirtyMany(s.dirty, 'sessions', targets.map((x) => x.id)) };
   }),
   updateTimer: (patch) => set((s) => ({ timer: { ...s.timer, ...patch } })),
+  completeTimer: (expectedEndAt) => {
+    let completion: PomodoroCompletion | null = null;
+    set((s) => {
+      const timer = s.timer;
+      // 比较并交换：只有仍持有这个结束时间的调用可以完成本段。
+      // completedEndAt 会持久化，可阻止组件重挂载或页面刷新后重复记账。
+      if (timer.endAt !== expectedEndAt || timer.completedEndAt === expectedEndAt || expectedEndAt > Date.now() + 500) return s;
+
+      const safeMinutes = (value: number, fallback: number) => Number.isFinite(value) && value > 0 ? Math.min(180, value) : fallback;
+      const durations = {
+        focus: safeMinutes(s.settings.focusMin, 25),
+        short: safeMinutes(s.settings.shortMin, 5),
+        long: safeMinutes(s.settings.longMin, 15),
+      };
+      const longBreakEnabled = s.settings.longBreakEnabled !== false;
+      const nextMode: PomodoroMode = timer.mode === 'focus'
+        ? longBreakEnabled && (timer.round + 1) % Math.max(1, s.settings.longEvery || 4) === 0 ? 'long' : 'short'
+        : 'focus';
+      const nextSeconds = durations[nextMode] * 60;
+      const now = Date.now();
+      // 相同结束时间在多个浏览器页面触发时使用相同 ID，服务端同步后也不会形成重复记录。
+      const sessionId = `timer-${Math.trunc(expectedEndAt).toString(36)}-${timer.mode}`;
+      const alreadyRecorded = s.sessions.some((session) => session.id === sessionId);
+      const session: PomodoroSession = {
+        id: sessionId,
+        mode: timer.mode,
+        minutes: durations[timer.mode],
+        task: timer.task.trim(),
+        endedAt: expectedEndAt,
+        updatedAt: now,
+      };
+      completion = { mode: timer.mode, task: timer.task.trim(), nextMode, nextSeconds, sound: s.settings.sound };
+
+      return {
+        sessions: alreadyRecorded ? s.sessions : [...s.sessions, session],
+        dirty: alreadyRecorded ? s.dirty : withDirty(s.dirty, 'sessions', sessionId),
+        timer: {
+          ...timer,
+          mode: nextMode,
+          remaining: nextSeconds,
+          endAt: s.settings.autoNext ? now + nextSeconds * 1000 : null,
+          completedEndAt: expectedEndAt,
+          round: timer.mode === 'focus' ? timer.round + 1 : timer.round,
+        },
+      };
+    });
+    return completion;
+  },
 
   addDailyTask: (t) => { const id = uid(), now = Date.now(); set((s) => ({ daily_tasks: [...s.daily_tasks, { ...t, id, enabled: true, completedDates: [], createdAt: now, updatedAt: now }], dirty: withDirty(s.dirty, 'daily_tasks', id) })); return id; },
   updateDailyTask: (id, patch) => set((s) => ({ daily_tasks: s.daily_tasks.map((t) => t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t), dirty: withDirty(s.dirty, 'daily_tasks', id) })),

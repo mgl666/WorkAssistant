@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Coffee,
   Flame,
@@ -7,8 +7,9 @@ import {
   RotateCcw,
   SkipForward,
   Timer as TimerIcon,
+  VolumeX,
 } from 'lucide-react';
-import { beep, cn, notify, requestNotifyPermission } from '@/lib/utils';
+import { cn, notify, playTimerAlarm, prepareTimerSound, requestNotifyPermission, stopTimerAlarm } from '@/lib/utils';
 import { formatClock, formatCountdown, formatMinutes, startOfWeek, todayKey } from '@/lib/date';
 import { useStore, type PomodoroMode, type Settings } from '@/store/useStore';
 import { useDeletable } from '@/hooks/useDeletable';
@@ -39,11 +40,11 @@ export default function Pomodoro() {
   const settings = useStore((s) => s.settings);
   const updateSettings = useStore((s) => s.updateSettings);
   const sessions = useStore((s) => s.sessions);
-  const addSession = useStore((s) => s.addSession);
   const clearSessions = useStore((s) => s.clearSessions);
   const todos = useStore((s) => s.todos);
   const timer = useStore((s) => s.timer);
   const updateTimer = useStore((s) => s.updateTimer);
+  const completeTimer = useStore((s) => s.completeTimer);
   const deletable = useDeletable();
 
   const durations = useMemo(
@@ -57,7 +58,7 @@ export default function Pomodoro() {
   const [remaining, setRemaining] = useState(() => endAt === null ? timer.remaining : Math.max(0, (endAt - Date.now()) / 1000));
 
   const running = endAt !== null;
-  const handledRef = useRef<number | null>(null);
+  const [alarmPlaying, setAlarmPlaying] = useState(false);
   const total = Math.max(1, durations[mode] * 60);
   const progress = Math.min(1, Math.max(0, 1 - remaining / total));
 
@@ -74,25 +75,22 @@ export default function Pomodoro() {
   /* 倒计时归零：记录会话并切换到下一阶段 */
   useEffect(() => {
     if (endAt === null || remaining > 0) return;
-    if (handledRef.current === endAt) return;
-    handledRef.current = endAt;
+    const completed = completeTimer(endAt);
+    if (!completed) return;
 
-    addSession({ mode, minutes: durations[mode], task: task.trim(), endedAt: Date.now() });
-    if (settings.sound) beep(mode === 'focus' ? 3 : 2);
+    setRemaining(completed.nextSeconds);
+    if (completed.sound && playTimerAlarm()) {
+      setAlarmPlaying(true);
+    }
     notify(
-      mode === 'focus' ? '专注结束，休息一下' : '休息结束，开始专注',
-      task.trim() || undefined,
+      completed.mode === 'focus' ? '专注结束，休息一下' : '休息结束，开始专注',
+      completed.task || undefined,
     );
+  }, [remaining, endAt, completeTimer]);
 
-    const next: PomodoroMode = mode === 'focus'
-      ? longBreakEnabled && (round + 1) % Math.max(1, settings.longEvery) === 0 ? 'long' : 'short'
-      : 'focus';
-    const nextSec = durations[next] * 60;
-
-    setRemaining(nextSec);
-    updateTimer({ mode: next, remaining: nextSec, round: mode === 'focus' ? round + 1 : round, endAt: settings.autoNext ? Date.now() + nextSec * 1000 : null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remaining, endAt]);
+  useEffect(() => () => {
+    stopTimerAlarm();
+  }, []);
 
   /* 标签页标题显示剩余时间 */
   useEffect(() => {
@@ -102,25 +100,34 @@ export default function Pomodoro() {
     };
   }, [running, remaining, mode]);
 
+  const stopAlarm = () => {
+    stopTimerAlarm();
+    setAlarmPlaying(false);
+  };
+
   const switchMode = (next: PomodoroMode) => {
+    stopAlarm();
     const nextSec = durations[next] * 60;
     setRemaining(nextSec);
-    updateTimer({ mode: next, endAt: null, remaining: nextSec });
+    updateTimer({ mode: next, endAt: null, completedEndAt: undefined, remaining: nextSec });
   };
 
   const start = () => {
+    stopAlarm();
     requestNotifyPermission();
+    if (settings.sound) prepareTimerSound();
     const nextRemaining = remaining <= 0 ? durations[mode] * 60 : remaining;
     setRemaining(nextRemaining);
-    updateTimer({ remaining: nextRemaining, endAt: Date.now() + Math.max(nextRemaining, 0.5) * 1000 });
+    updateTimer({ remaining: nextRemaining, completedEndAt: undefined, endAt: Date.now() + Math.max(nextRemaining, 0.5) * 1000 });
   };
 
   const pause = () => updateTimer({ endAt: null, remaining });
 
   const reset = () => {
+    stopAlarm();
     const nextSec = durations[mode] * 60;
     setRemaining(nextSec);
-    updateTimer({ endAt: null, remaining: nextSec });
+    updateTimer({ endAt: null, completedEndAt: undefined, remaining: nextSec });
   };
 
   const skip = () => {
@@ -246,6 +253,7 @@ export default function Pomodoro() {
               <SkipForward size={16} />
               跳过
             </button>
+            {alarmPlaying && <button className="btn-outline py-2" onClick={stopAlarm} title="停止提示音"><VolumeX size={16} />停止铃声</button>}
           </div>
 
           <div className="mt-6 w-full space-y-2">
@@ -445,7 +453,7 @@ export default function Pomodoro() {
               type="checkbox"
               className="h-4 w-4 accent-indigo-600"
               checked={settings.sound}
-              onChange={(e) => updateSettings({ sound: e.target.checked })}
+              onChange={(e) => { updateSettings({ sound: e.target.checked }); if (!e.target.checked) stopAlarm(); }}
             />
           </label>
         </div>
