@@ -40,7 +40,7 @@ interface State extends Omit<WorkspaceSnapshot, 'lastPulledAt' | 'lastSyncAt'> {
   addTodo: (t: Partial<Todo>) => string; updateTodo: (id: string, patch: Partial<Todo>) => void; removeTodo: (id: string) => void; toggleTodo: (id: string) => void; clearCompletedTodos: (listId?: string) => void;
   addList: (name: string) => string; renameList: (id: string, name: string) => void; removeList: (id: string) => void;
   addNote: () => string; updateNote: (id: string, patch: Partial<Note>) => void; removeNote: (id: string) => void;
-  addSession: (s: Omit<PomodoroSession, 'id' | 'updatedAt'>) => void; clearSessions: (dateKey?: string) => void;
+  addSession: (s: Omit<PomodoroSession, 'id' | 'updatedAt'>) => void; updateSession: (id: string, task: string) => void; removeSession: (id: string) => void; clearSessions: (dateKey?: string) => void;
   updateTimer: (patch: Partial<PomodoroTimer>) => void; completeTimer: (expectedEndAt: number) => PomodoroCompletion | null;
   addDailyTask: (t: Pick<DailyTask, 'title' | 'note' | 'daysOfWeek'>) => string; updateDailyTask: (id: string, patch: Partial<DailyTask>) => void; removeDailyTask: (id: string) => void; toggleDailyTaskDate: (id: string, date: string) => void;
   addGoal: (title: string) => string; renameGoal: (id: string, title: string) => void; removeGoal: (id: string) => void; moveGoal: (id: string, toIndex: number) => void;
@@ -117,6 +117,16 @@ export const useStore = create<State>()(persist((set, get) => ({
   updateNote: (id, patch) => set((s) => ({ notes: s.notes.map((n) => n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n), dirty: withDirty(s.dirty, 'notes', id) })),
   removeNote: (id) => set((s) => { const target = s.notes.find((n) => n.id === id); if (!target) return s; return { notes: s.notes.filter((n) => n.id !== id), tombstones: pushTombstone(s.tombstones, tombstoneOf('notes', target, Date.now())), dirty: dropDirty(s.dirty, 'notes', id) }; }),
   addSession: (sess) => set((s) => { const id = uid(); return { sessions: [...s.sessions, { ...sess, id, updatedAt: Date.now() }], dirty: withDirty(s.dirty, 'sessions', id) }; }),
+  updateSession: (id, task) => set((s) => {
+    if (!s.sessions.some((session) => session.id === id)) return s;
+    return { sessions: s.sessions.map((session) => session.id === id ? { ...session, task, updatedAt: Date.now() } : session), dirty: withDirty(s.dirty, 'sessions', id) };
+  }),
+  removeSession: (id) => set((s) => {
+    const target = s.sessions.find((session) => session.id === id);
+    if (!target) return s;
+    const now = Date.now();
+    return { sessions: s.sessions.filter((session) => session.id !== id), tombstones: pushTombstone(s.tombstones, tombstoneOf('sessions', target, now)), dirty: dropDirty(s.dirty, 'sessions', id) };
+  }),
   // 传入日期键时只清除那一天的番茄记录，不传则清除全部历史
   clearSessions: (dateKey) => set((s) => {
     const now = Date.now();

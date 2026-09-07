@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ChevronLeft,
+  ChevronRight,
   Coffee,
   Pause,
   Play,
   RotateCcw,
   SkipForward,
   Timer as TimerIcon,
+  Trash2,
 } from 'lucide-react';
 import { cn, prepareTimerSound, requestNotifyPermission } from '@/lib/utils';
 import { stopGlobalTimerAlarm } from '@/components/PomodoroRuntime';
@@ -378,6 +381,7 @@ export default function Pomodoro() {
       </div>
 
       <FocusStatistics sessions={focusSessions} />
+      <SessionHistory sessions={activeSessions} />
     </div>
   );
 }
@@ -390,6 +394,12 @@ function dateFromKey(key: string) {
 function nextDateKey(key: string) {
   const date = dateFromKey(key);
   date.setDate(date.getDate() + 1);
+  return toKey(date);
+}
+
+function shiftDateKey(key: string, amount: number) {
+  const date = dateFromKey(key);
+  date.setDate(date.getDate() + amount);
   return toKey(date);
 }
 
@@ -522,5 +532,76 @@ function FocusStatistics({ sessions }: { sessions: PomodoroSession[] }) {
       </div>
       {groupByMonth && range === 'custom' && <p className="mt-2 text-xs text-slate-400">自定义时间超过 90 天，统计表将按月汇总。</p>}
     </section>
+  );
+}
+
+function SessionHistory({ sessions }: { sessions: PomodoroSession[] }) {
+  const today = todayKey();
+  const [date, setDate] = useState(today);
+  const removeSession = useStore((state) => state.removeSession);
+  const deletable = useDeletable();
+  const records = useMemo(() => sessions
+    .filter((session) => toKey(new Date(session.endedAt)) === date)
+    .sort((a, b) => b.endedAt - a.endedAt), [sessions, date]);
+  const focusMinutes = records.filter((session) => session.mode === 'focus').reduce((sum, session) => sum + session.minutes, 0);
+
+  return (
+    <section className="card min-w-0 p-4 sm:p-5 lg:col-span-5">
+      <SectionTitle extra={<span className="text-xs font-normal text-slate-400">{records.length} 条 · 专注 {formatMinutes(focusMinutes)}</span>}>历史记录</SectionTitle>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button className="btn-outline px-2" onClick={() => setDate((current) => shiftDateKey(current, -1))} aria-label="查看前一天"><ChevronLeft size={16} /></button>
+        <input type="date" className="input w-auto" max={today} value={date} onChange={(event) => setDate(event.target.value || today)} aria-label="历史记录日期" />
+        <button className="btn-outline px-2" disabled={date >= today} onClick={() => setDate((current) => shiftDateKey(current, 1))} aria-label="查看后一天"><ChevronRight size={16} /></button>
+        {date !== today && <button className="btn-outline text-xs" onClick={() => setDate(today)}>回到今天</button>}
+      </div>
+
+      {records.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-200 py-8 text-center text-sm text-slate-400 dark:border-slate-700">
+          <TimerIcon size={22} className="mx-auto mb-1 text-slate-300 dark:text-slate-600" />
+          这一天没有番茄记录
+        </p>
+      ) : (
+        <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+          {records.map((session) => (
+            <SessionHistoryRow
+              key={session.id}
+              session={session}
+              onDelete={() => deletable(`已删除 ${formatClock(session.endedAt)} 的${MODE_META[session.mode].label}记录`, () => removeSession(session.id))}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SessionHistoryRow({ session, onDelete }: { session: PomodoroSession; onDelete: () => void }) {
+  const updateSession = useStore((state) => state.updateSession);
+  const [note, setNote] = useState(session.task);
+
+  useEffect(() => setNote(session.task), [session.task]);
+
+  const save = () => {
+    const next = note.trim();
+    if (next !== session.task) updateSession(session.id, next);
+    if (next !== note) setNote(next);
+  };
+
+  return (
+    <li className="grid items-center gap-2 p-3 sm:grid-cols-[88px_72px_64px_minmax(0,1fr)_auto]">
+      <span className="font-mono text-xs text-slate-500">{formatClock(session.endedAt)}</span>
+      <span className={cn('chip w-fit text-[11px]', session.mode === 'focus' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' : session.mode === 'short' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-sky-50 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300')}>{MODE_META[session.mode].label}</span>
+      <span className="text-xs tabular-nums text-slate-400">{session.minutes} 分钟</span>
+      <textarea
+        className="input min-h-10 resize-y py-2 text-sm"
+        rows={1}
+        placeholder="添加这一轮做了什么的备注"
+        aria-label={`${formatClock(session.endedAt)} ${MODE_META[session.mode].label}记录备注`}
+        value={note}
+        onChange={(event) => setNote(event.target.value)}
+        onBlur={save}
+      />
+      <button className="btn-danger justify-self-end px-2" onClick={onDelete} title="删除这条记录" aria-label={`删除 ${formatClock(session.endedAt)} 的记录`}><Trash2 size={15} /></button>
+    </li>
   );
 }
