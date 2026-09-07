@@ -22,7 +22,7 @@ export interface DailyTask { id: string; title: string; note: string; daysOfWeek
 export interface GoalTask { id: string; title: string; parentId?: string; done: boolean; completedAt?: number; createdAt: number }
 export interface LongTermGoal { id: string; title: string; tasks: GoalTask[]; createdAt: number; updatedAt: number }
 export interface Settings {
-  theme: 'light' | 'dark'; focusMin: number; shortMin: number; longMin: number; longEvery: number; autoNext: boolean; sound: boolean;
+  theme: 'light' | 'dark'; focusMin: number; shortMin: number; longMin: number; longEvery: number; longBreakEnabled: boolean; autoNext: boolean; sound: boolean;
   aiEndpoint: string; aiModel: string; /** 仅保存在当前设备 */ aiApiKey: string;
 }
 export type SyncRecord = CalEvent | Todo | TodoList | Note | PomodoroSession | DailyTask | LongTermGoal;
@@ -59,7 +59,7 @@ function tombstoneOf(table: SyncTable, record: unknown, at: number): Tombstone {
 function pushTombstone(list: Tombstone[], t: Tombstone) { return [...list.filter((x) => !(x.table === t.table && x.id === t.id)), t]; }
 
 export const defaultSettings: Settings = {
-  theme: 'light', focusMin: 25, shortMin: 5, longMin: 15, longEvery: 4, autoNext: false, sound: true,
+  theme: 'light', focusMin: 25, shortMin: 5, longMin: 15, longEvery: 4, longBreakEnabled: true, autoNext: false, sound: true,
   aiEndpoint: 'https://api.openai.com/v1', aiModel: 'gpt-4.1-mini', aiApiKey: '',
 };
 const defaultSync: SyncState = { status: 'disabled', lastPulledAt: 0, lastSyncAt: 0, lastError: '', email: null, userId: null };

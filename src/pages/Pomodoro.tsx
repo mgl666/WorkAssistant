@@ -52,6 +52,8 @@ export default function Pomodoro() {
   );
 
   const { mode, endAt, round, task } = timer;
+  const longBreakEnabled = settings.longBreakEnabled !== false;
+  const availableModes: PomodoroMode[] = longBreakEnabled ? ['focus', 'short', 'long'] : ['focus', 'short'];
   const [remaining, setRemaining] = useState(() => endAt === null ? timer.remaining : Math.max(0, (endAt - Date.now()) / 1000));
 
   const running = endAt !== null;
@@ -82,8 +84,9 @@ export default function Pomodoro() {
       task.trim() || undefined,
     );
 
-    const next: PomodoroMode =
-      mode === 'focus' ? (round + 1) % Math.max(1, settings.longEvery) === 0 ? 'long' : 'short' : 'focus';
+    const next: PomodoroMode = mode === 'focus'
+      ? longBreakEnabled && (round + 1) % Math.max(1, settings.longEvery) === 0 ? 'long' : 'short'
+      : 'focus';
     const nextSec = durations[next] * 60;
 
     setRemaining(nextSec);
@@ -170,8 +173,8 @@ export default function Pomodoro() {
       {/* -------------------------------- 计时器 ------------------------------- */}
       <div className="h-full lg:col-span-3">
         <div className="card flex h-full flex-col items-center p-4 sm:p-6">
-          <div className="mb-5 grid w-full max-w-sm grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-            {(Object.keys(MODE_META) as PomodoroMode[]).map((m) => (
+          <div className={cn('mb-5 grid w-full max-w-sm gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800', longBreakEnabled ? 'grid-cols-3' : 'grid-cols-2')}>
+            {availableModes.map((m) => (
               <button
                 key={m}
                 onClick={() => switchMode(m)}
@@ -217,9 +220,9 @@ export default function Pomodoro() {
                 {MODE_META[mode].label}
                 {task.trim() && <span className="ml-1 text-slate-400">· {task.trim()}</span>}
               </div>
-              <div className="mt-2 text-xs text-slate-400">
-                本周期已完成 {round % Math.max(1, settings.longEvery)} / {settings.longEvery} 个专注
-              </div>
+              <div className="mt-2 text-xs text-slate-400">{longBreakEnabled
+                ? `本周期已完成 ${round % Math.max(1, settings.longEvery)} / ${settings.longEvery} 个专注`
+                : `已完成 ${round} 个专注`}</div>
             </div>
           </div>
 
@@ -365,7 +368,20 @@ export default function Pomodoro() {
 
         <div className="card space-y-3 p-4">
           <SectionTitle>时长设置（分钟）</SectionTitle>
-          <div className="grid grid-cols-3 gap-2">
+          <label className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+            <span>启用长休息</span>
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-indigo-600"
+              checked={longBreakEnabled}
+              onChange={(e) => {
+                const enabled = e.target.checked;
+                updateSettings({ longBreakEnabled: enabled });
+                if (!enabled && mode === 'long') switchMode('short');
+              }}
+            />
+          </label>
+          <div className={cn('grid gap-2', longBreakEnabled ? 'grid-cols-3' : 'grid-cols-2')}>
             <label className="block">
               <span className="mb-1 block text-xs text-slate-500">专注</span>
               <input
@@ -388,7 +404,7 @@ export default function Pomodoro() {
                 onChange={(e) => changeDuration('shortMin', Number(e.target.value))}
               />
             </label>
-            <label className="block">
+            {longBreakEnabled && <label className="block">
               <span className="mb-1 block text-xs text-slate-500">长休息</span>
               <input
                 type="number"
@@ -398,9 +414,9 @@ export default function Pomodoro() {
                 value={settings.longMin}
                 onChange={(e) => changeDuration('longMin', Number(e.target.value))}
               />
-            </label>
+            </label>}
           </div>
-          <label className="flex items-center justify-between text-sm">
+          {longBreakEnabled && <label className="flex items-center justify-between text-sm">
             <span>每几个专注后长休息</span>
             <input
               type="number"
@@ -410,7 +426,7 @@ export default function Pomodoro() {
               value={settings.longEvery}
               onChange={(e) => updateSettings({ longEvery: Math.min(12, Math.max(2, Number(e.target.value) || 4)) })}
             />
-          </label>
+          </label>}
           <label className="flex items-center justify-between text-sm">
             <span>自动开始下一段</span>
             <input
