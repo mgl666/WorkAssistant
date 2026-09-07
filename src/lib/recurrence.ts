@@ -9,6 +9,8 @@ export function eventOccursOn(event: CalEvent, key: string): boolean {
   const recurrence = event.recurrence ?? 'none';
   if (recurrence === 'none') return key === event.date;
   const source = fromKey(event.date), date = fromKey(key);
+  if (recurrence === 'daily') return true;
+  if (recurrence === 'weekdays') return date.getDay() >= 1 && date.getDay() <= 5;
   if (recurrence === 'weekly') return source.getDay() === date.getDay();
   if (recurrence === 'monthly') return source.getDate() === date.getDate();
   if (recurrence === 'yearly') return source.getMonth() === date.getMonth() && source.getDate() === date.getDate();

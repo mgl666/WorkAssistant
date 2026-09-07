@@ -33,7 +33,7 @@ const TODO_DOT: Record<TodoPriority, string> = {
   1: 'bg-slate-400', 2: 'bg-sky-500', 3: 'bg-indigo-500', 4: 'bg-amber-500', 5: 'bg-rose-500',
 };
 const RECURRENCE: Array<{ value: EventRecurrence; label: string }> = [
-  { value: 'none', label: '不循环' }, { value: 'weekly', label: '每周同一天' }, { value: 'monthly', label: '每月同一天' }, { value: 'yearly', label: '每年同一天' },
+  { value: 'none', label: '不循环' }, { value: 'daily', label: '每天' }, { value: 'weekdays', label: '工作日（周一至周五）' }, { value: 'weekly', label: '每周同一天' }, { value: 'monthly', label: '每月同一天' }, { value: 'yearly', label: '每年同一天' },
 ];
 interface EventForm { id: string | null; title: string; time: string; endTime: string; note: string; color: EventColor; recurrence: EventRecurrence; recurrenceUntil: string }
 const blankForm = (): EventForm => ({ id: null, title: '', time: '', endTime: '', note: '', color: 'indigo', recurrence: 'none', recurrenceUntil: '' });

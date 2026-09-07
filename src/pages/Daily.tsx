@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -44,6 +46,7 @@ export default function Daily() {
   const updateTask = useStore((s) => s.updateDailyTask);
   const removeTask = useStore((s) => s.removeDailyTask);
   const toggleDate = useStore((s) => s.toggleDailyTaskDate);
+  const moveTask = useStore((s) => s.moveDailyTask);
   const deletable = useDeletable();
 
   const [title, setTitle] = useState('');
@@ -61,7 +64,8 @@ export default function Daily() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
 
-  const tasksDueOn = (key: string) => tasks.filter((task) => periodicTaskDueOn(task, key));
+  const orderedTasks = useMemo(() => [...tasks].sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt)), [tasks]);
+  const tasksDueOn = (key: string) => orderedTasks.filter((task) => periodicTaskDueOn(task, key));
   const doneOf = (key: string) => tasksDueOn(key).filter((t) => t.completedDates.includes(key)).length;
   const statusOf = (key: string): DayStatus => {
     const due = tasksDueOn(key);
@@ -288,10 +292,14 @@ export default function Daily() {
         <SectionTitle>全部周期任务 · {tasks.length}</SectionTitle>
         {tasks.length === 0 ? <Empty icon={Repeat2} text="还没有周期任务" action={<button className="btn-primary mt-2" onClick={() => titleRef.current?.focus()}><Plus size={15} />新增周期任务</button>} /> : (
           <ul className="max-h-[310px] overflow-y-auto divide-y divide-slate-100 pr-1 dark:divide-slate-800">
-            {tasks.map((task) => <li key={task.id} className="flex items-center gap-3 py-3">
+            {orderedTasks.map((task, index) => <li key={task.id} className="flex items-center gap-2 py-3 sm:gap-3">
               <span className={cn('min-w-0 flex-1', !task.enabled && 'opacity-50')}>
                 <span className="flex items-center gap-2"><span className="truncate text-sm font-medium">{task.title}</span><span className="chip shrink-0 bg-indigo-50 text-[10px] text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">{PERIODIC_FREQUENCY_LABELS[periodicFrequencyOf(task)]}</span></span>
                 <span className="text-xs text-slate-400">{periodicScheduleText(task, DAYS)}</span>
+              </span>
+              <span className="flex shrink-0 items-center">
+                <button className="btn-ghost px-1.5" disabled={index === 0} title="上移" aria-label={`上移周期任务 ${task.title}`} onClick={() => moveTask(task.id, index - 1)}><ArrowUp size={15} /></button>
+                <button className="btn-ghost px-1.5" disabled={index === orderedTasks.length - 1} title="下移" aria-label={`下移周期任务 ${task.title}`} onClick={() => moveTask(task.id, index + 1)}><ArrowDown size={15} /></button>
               </span>
               <button className="btn-ghost px-2" title={task.enabled ? '暂停' : '启用'} onClick={() => updateTask(task.id, { enabled: !task.enabled })}>{task.enabled ? <Pause size={15} /> : <Play size={15} />}</button>
               <button className="btn-danger px-2" title="删除" onClick={() => deletable(`已删除「${task.title || '周期任务'}」`, () => removeTask(task.id))}><Trash2 size={15} /></button>
