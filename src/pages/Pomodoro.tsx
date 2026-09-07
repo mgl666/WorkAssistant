@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Coffee,
-  Flame,
   Pause,
   Play,
   RotateCcw,
@@ -24,18 +23,6 @@ const MODE_META: Record<PomodoroMode, { label: string; ring: string; text: strin
 const R = 88;
 const C = 2 * Math.PI * R;
 type StatisticsRange = 'week' | 'month' | 'year' | 'custom';
-
-function dayKeysLast7(): string[] {
-  const start = startOfWeek(new Date());
-  const today = todayKey();
-  const keys: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    if (key <= today) keys.push(key);
-  }
-  return keys;
-}
 
 export default function Pomodoro() {
   const settings = useStore((s) => s.settings);
@@ -133,8 +120,6 @@ export default function Pomodoro() {
   }, [sessions, tombstones]);
   const focusSessions = useMemo(() => activeSessions.filter((session) => session.mode === 'focus'), [activeSessions]);
   const today = todayKey();
-  const weekStartKey = toKey(startOfWeek(new Date()));
-  const currentYear = new Date().getFullYear();
   const todaySessions = useMemo(
     () =>
       activeSessions
@@ -147,32 +132,6 @@ export default function Pomodoro() {
     [activeSessions, today],
   );
 
-  const todayFocus = todaySessions.filter((s) => s.mode === 'focus');
-  const todayMinutes = todayFocus.reduce((acc, s) => acc + s.minutes, 0);
-  const weekFocus = focusSessions.filter((session) => {
-    const key = toKey(new Date(session.endedAt));
-    return key >= weekStartKey && key <= today;
-  });
-  const weekMinutes = weekFocus.reduce((acc, session) => acc + session.minutes, 0);
-  const yearFocus = focusSessions.filter((session) => new Date(session.endedAt).getFullYear() === currentYear);
-  const yearMinutes = yearFocus.reduce((acc, session) => acc + session.minutes, 0);
-  const totalMinutes = focusSessions.reduce((acc, session) => acc + session.minutes, 0);
-
-  const weekBars = useMemo(() => {
-    const keys = dayKeysLast7();
-    return keys.map((key) => {
-      const minutes = focusSessions
-        .filter((s) => {
-          const d = new Date(s.endedAt);
-          const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          return s.mode === 'focus' && k === key;
-        })
-        .reduce((acc, s) => acc + s.minutes, 0);
-      return { key, minutes };
-    });
-  }, [focusSessions]);
-
-  const maxBar = Math.max(60, ...weekBars.map((b) => b.minutes));
   const openTodos = todos.filter((t) => !t.done).slice(0, 5);
 
   return (
@@ -290,51 +249,6 @@ export default function Pomodoro() {
 
       {/* -------------------------------- 侧栏 -------------------------------- */}
       <div className="space-y-4 lg:col-span-2">
-        <div className="card p-4">
-          <SectionTitle>专注统计</SectionTitle>
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-slate-50 py-3 dark:bg-slate-800/60">
-              <div className="text-xl font-semibold">{todayFocus.length}</div>
-              <div className="text-xs text-slate-400">今日 · {formatMinutes(todayMinutes)}</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 py-3 dark:bg-slate-800/60">
-              <div className="text-xl font-semibold">{weekFocus.length}</div>
-              <div className="text-xs text-slate-400">本周 · {formatMinutes(weekMinutes)}</div>
-            </div>
-            <div className="rounded-lg bg-slate-50 py-3 dark:bg-slate-800/60">
-              <div className="text-xl font-semibold">{yearFocus.length}</div>
-              <div className="text-xs text-slate-400">本年 · {formatMinutes(yearMinutes)}</div>
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm dark:border-slate-800">
-            <span className="text-slate-500 dark:text-slate-400">累计专注</span>
-            <span className="font-medium">{focusSessions.length} 次 · {formatMinutes(totalMinutes)}</span>
-          </div>
-
-          <div className="mt-4">
-            <div className="mb-1.5 flex items-center justify-between text-xs text-slate-400">
-              <span>本周专注</span>
-              <span className="flex items-center gap-1">
-                <Flame size={12} className="text-amber-500" />
-                {formatMinutes(weekBars.reduce((a, b) => a + b.minutes, 0))}
-              </span>
-            </div>
-            <div className="flex h-16 items-end gap-1.5">
-              {weekBars.map((b) => (
-                <div key={b.key} className="flex flex-1 flex-col items-center gap-1">
-                  <div
-                    className="w-full rounded-t bg-indigo-500/80"
-                    style={{ height: `${Math.max(2, (b.minutes / maxBar) * 48)}px` }}
-                    title={`${b.key}：${formatMinutes(b.minutes)}`}
-                  />
-                  <span className="text-[10px] text-slate-400">{b.key.slice(8)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
         <div className="card p-4">
           <SectionTitle
             extra={
