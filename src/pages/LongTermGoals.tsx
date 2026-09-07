@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Check, CheckCircle2, ChevronRight, CornerDownRight, MoreVertical, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, CornerDownRight, GripVertical, MoreVertical, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { Empty, useToast } from '@/components/ui';
 import { useDeletable } from '@/hooks/useDeletable';
 import { cn } from '@/lib/utils';
@@ -10,8 +10,11 @@ const HOVER_ACTIONS = 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:fo
 export default function LongTermGoals() {
   const goals = useStore((s) => s.goals);
   const addGoal = useStore((s) => s.addGoal);
+  const moveGoal = useStore((s) => s.moveGoal);
   const [title, setTitle] = useState('');
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const orderedGoals = useMemo(() => [...goals].sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt)), [goals]);
 
   const submit = () => {
     if (!title.trim()) return;
@@ -40,20 +43,46 @@ export default function LongTermGoals() {
         </div>
       </section>
 
-      {goals.length === 0 ? (
+      {orderedGoals.length === 0 ? (
         <section className="card min-h-[420px]">
           <Empty icon={Target} text="还没有长期目标" action={<button className="btn-primary mt-2" onClick={() => inputRef.current?.focus()}><Plus size={16} />新建第一个目标</button>} />
         </section>
       ) : (
         <div className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {goals.map((goal) => <GoalCard key={goal.id} goal={goal} />)}
+          {orderedGoals.map((goal, index) => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              index={index}
+              total={orderedGoals.length}
+              dragging={draggingId === goal.id}
+              onDragStart={() => setDraggingId(goal.id)}
+              onDragEnd={() => setDraggingId(null)}
+              onDrop={() => {
+                if (draggingId && draggingId !== goal.id) moveGoal(draggingId, index);
+                setDraggingId(null);
+              }}
+              onMove={(nextIndex) => moveGoal(goal.id, nextIndex)}
+            />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function GoalCard({ goal }: { goal: LongTermGoal }) {
+interface GoalCardProps {
+  goal: LongTermGoal;
+  index: number;
+  total: number;
+  dragging: boolean;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  onDrop: () => void;
+  onMove: (index: number) => void;
+}
+
+function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop, onMove }: GoalCardProps) {
   const store = useStore();
   const deletable = useDeletable();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -90,8 +119,22 @@ function GoalCard({ goal }: { goal: LongTermGoal }) {
   };
 
   return (
-    <article className="card flex h-[420px] min-w-0 flex-col overflow-hidden p-4 sm:p-5">
+    <article
+      className={cn('card flex h-[420px] min-w-0 flex-col overflow-hidden p-4 transition sm:p-5', dragging && 'opacity-50 ring-2 ring-indigo-400')}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={onDrop}
+    >
       <header className="relative flex items-start gap-2">
+        <button
+          draggable
+          onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; onDragStart(); }}
+          onDragEnd={onDragEnd}
+          className="-ml-2 mt-0.5 hidden cursor-grab touch-none rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 active:cursor-grabbing dark:hover:bg-slate-800 sm:block"
+          title="拖动调整目标顺序"
+          aria-label={`拖动「${goal.title}」调整顺序`}
+        >
+          <GripVertical size={18} />
+        </button>
         {renaming ? (
           <input
             autoFocus
@@ -108,6 +151,8 @@ function GoalCard({ goal }: { goal: LongTermGoal }) {
         <button className="btn-ghost -mr-2 px-2" aria-label={`${goal.title}菜单`} onClick={() => setMenuOpen((open) => !open)}><MoreVertical size={19} /></button>
         {menuOpen && (
           <div className="absolute right-0 top-9 z-10 w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+            <button disabled={index === 0} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800" onClick={() => { onMove(index - 1); setMenuOpen(false); }}><ArrowLeft size={14} />向前移动</button>
+            <button disabled={index === total - 1} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800" onClick={() => { onMove(index + 1); setMenuOpen(false); }}><ArrowRight size={14} />向后移动</button>
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { setMenuOpen(false); setRenaming(true); }}><Pencil size={14} />重命名</button>
             <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => { setMenuOpen(false); deletable(`已删除长期目标「${goal.title}」`, () => store.removeGoal(goal.id), { confirm: `删除「${goal.title}」会同时删除其中所有任务，确定继续吗？` }); }}><Trash2 size={14} />删除目标</button>
           </div>
