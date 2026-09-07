@@ -5,8 +5,6 @@ import { useDeletable } from '@/hooks/useDeletable';
 import { cn } from '@/lib/utils';
 import { useStore, type GoalTask, type LongTermGoal } from '@/store/useStore';
 
-const HOVER_ACTIONS = 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 sm:focus-within:opacity-100';
-
 export default function LongTermGoals() {
   const goals = useStore((s) => s.goals);
   const addGoal = useStore((s) => s.addGoal);
@@ -242,28 +240,31 @@ function GoalTaskRow({ goal, task, siblings, collapsed, onToggleCollapse, childF
 
   return (
     <li>
-      <div className="group flex min-h-10 items-center gap-3 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+      <div className="flex min-h-10 items-center gap-2 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
         <span className="flex h-6 w-9 shrink-0 items-center justify-center">
           {children.length > 0 && <button className="flex h-6 w-9 items-center justify-center gap-0.5 rounded-md text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" onClick={onToggleCollapse} aria-expanded={!collapsed} aria-label={`${collapsed ? '展开' : '折叠'} ${task.title} 的 ${children.length} 个二级任务`} title={`${collapsed ? '展开' : '折叠'}二级任务`}><ChevronRight size={15} className={cn('transition-transform', !collapsed && 'rotate-90')} /><span className="text-[10px] tabular-nums">{children.length}</span></button>}
         </span>
         <TaskCheck done={task.done} label={task.title} onClick={() => store.toggleGoalTask(goal.id, task.id)} />
         <input title="点击可直接修改任务名称" className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', task.done && 'text-slate-400 line-through')} value={task.title} onChange={(e) => store.updateGoalTask(goal.id, task.id, e.target.value)} aria-label="长期目标任务名称" />
         <TaskProgress percent={percent} />
-        <TaskOrderButtons task={task} siblings={siblings} onMove={(targetId) => store.moveGoalTask(goal.id, task.id, targetId)} />
-        {!task.done && <button className={cn('btn-ghost px-1.5', HOVER_ACTIONS)} title="添加二级子任务" aria-label={`为 ${task.title} 添加二级子任务`} onClick={() => { setChildFor(childFor === task.id ? null : task.id); setChildTitle(''); }}><Plus size={15} /></button>}
-        <button className={cn('btn-danger px-1.5', HOVER_ACTIONS)} title="删除任务" aria-label={`删除 ${task.title}`} onClick={() => removeTask(task.id, task.title)}><Trash2 size={14} /></button>
+        <TaskActionsMenu
+          task={task}
+          siblings={siblings}
+          onMove={(targetId) => store.moveGoalTask(goal.id, task.id, targetId)}
+          onAddChild={!task.done ? () => { setChildFor(childFor === task.id ? null : task.id); setChildTitle(''); } : undefined}
+          onDelete={() => removeTask(task.id, task.title)}
+        />
       </div>
-      {children.length > 0 && !collapsed && <ul className="ml-7 space-y-0.5">{children.map((child) => (
-        <li key={child.id} className="group flex min-h-9 items-center gap-2 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
+      {children.length > 0 && !collapsed && <ul className="ml-10 space-y-0.5 border-l border-slate-200 pl-2 dark:border-slate-700">{children.map((child) => (
+        <li key={child.id} className="flex min-h-9 items-center gap-2 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
           <CornerDownRight size={14} className="shrink-0 text-slate-300 dark:text-slate-600" />
           <TaskCheck done={child.done} label={child.title} small onClick={() => store.toggleGoalTask(goal.id, child.id)} />
           <input title="点击可直接修改任务名称" className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', child.done && 'text-slate-400 line-through')} value={child.title} onChange={(e) => store.updateGoalTask(goal.id, child.id, e.target.value)} aria-label="二级子任务名称" />
-          <TaskOrderButtons task={child} siblings={children} onMove={(targetId) => store.moveGoalTask(goal.id, child.id, targetId)} />
-          <button className={cn('btn-danger px-1.5', HOVER_ACTIONS)} title="删除子任务" aria-label={`删除 ${child.title}`} onClick={() => removeTask(child.id, child.title, true)}><Trash2 size={13} /></button>
+          <TaskActionsMenu task={child} siblings={children} onMove={(targetId) => store.moveGoalTask(goal.id, child.id, targetId)} onDelete={() => removeTask(child.id, child.title, true)} child />
         </li>
       ))}</ul>}
       {childFor === task.id && (
-        <div className="ml-8 mt-1 flex gap-2 rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+        <div className="ml-10 mt-1 flex gap-2 border-l border-slate-200 bg-slate-50 p-2 pl-3 dark:border-slate-700 dark:bg-slate-800/60">
           <CornerDownRight size={14} className="mt-2 shrink-0 text-slate-400" />
           <input autoFocus className="input h-9 min-w-0 flex-1 py-1 text-sm" placeholder="添加二级子任务" value={childTitle} onChange={(e) => setChildTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') addChild(task.id); if (e.key === 'Escape') { setChildFor(null); setChildTitle(''); } }} />
           <button className="btn-outline h-9 px-2 text-xs" onClick={() => addChild(task.id)}>添加</button>
@@ -275,7 +276,7 @@ function GoalTaskRow({ goal, task, siblings, collapsed, onToggleCollapse, childF
 
 function TaskProgress({ percent }: { percent: number }) {
   return (
-    <span className="w-10 shrink-0" title={`完成度 ${percent}%`} aria-label={`完成度 ${percent}%`}>
+    <span className="ml-auto w-12 shrink-0" title={`完成度 ${percent}%`} aria-label={`完成度 ${percent}%`}>
       <span className="block text-center text-[10px] tabular-nums text-slate-400">{percent}%</span>
       <span className="mt-0.5 block h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
         <span className="block h-full rounded-full bg-indigo-500 transition-[width]" style={{ width: `${percent}%` }} />
@@ -284,13 +285,28 @@ function TaskProgress({ percent }: { percent: number }) {
   );
 }
 
-function TaskOrderButtons({ task, siblings, onMove }: { task: GoalTask; siblings: GoalTask[]; onMove: (targetId: string) => void }) {
+interface TaskActionsMenuProps {
+  task: GoalTask;
+  siblings: GoalTask[];
+  onMove: (targetId: string) => void;
+  onAddChild?: () => void;
+  onDelete: () => void;
+  child?: boolean;
+}
+
+function TaskActionsMenu({ task, siblings, onMove, onAddChild, onDelete, child = false }: TaskActionsMenuProps) {
+  const [open, setOpen] = useState(false);
   const index = siblings.findIndex((item) => item.id === task.id);
   return (
-    <span className={cn('flex shrink-0 items-center', HOVER_ACTIONS)}>
-      <button disabled={index <= 0} className="rounded p-0.5 text-slate-400 hover:bg-slate-200 disabled:opacity-20 dark:hover:bg-slate-700" title="上移" aria-label={`上移 ${task.title}`} onClick={() => index > 0 && onMove(siblings[index - 1].id)}><ChevronUp size={13} /></button>
-      <button disabled={index < 0 || index >= siblings.length - 1} className="rounded p-0.5 text-slate-400 hover:bg-slate-200 disabled:opacity-20 dark:hover:bg-slate-700" title="下移" aria-label={`下移 ${task.title}`} onClick={() => index >= 0 && index < siblings.length - 1 && onMove(siblings[index + 1].id)}><ChevronDown size={13} /></button>
-    </span>
+    <div className="relative shrink-0">
+      <button className="btn-ghost px-1.5" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-label={`${task.title}操作菜单`} title="任务操作"><MoreVertical size={15} /></button>
+      {open && <div className="absolute right-0 top-8 z-30 w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+        <button disabled={index <= 0} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800" onClick={() => { if (index > 0) onMove(siblings[index - 1].id); setOpen(false); }}><ChevronUp size={14} />上移</button>
+        <button disabled={index < 0 || index >= siblings.length - 1} className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-slate-800" onClick={() => { if (index >= 0 && index < siblings.length - 1) onMove(siblings[index + 1].id); setOpen(false); }}><ChevronDown size={14} />下移</button>
+        {onAddChild && <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => { onAddChild(); setOpen(false); }}><Plus size={14} />添加二级</button>}
+        <button className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10" onClick={() => { setOpen(false); onDelete(); }}><Trash2 size={14} />删除{child ? '二级任务' : '任务'}</button>
+      </div>}
+    </div>
   );
 }
 
