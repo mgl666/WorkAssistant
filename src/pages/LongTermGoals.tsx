@@ -241,11 +241,9 @@ function GoalTaskRow({ goal, task, siblings, collapsed, onToggleCollapse, childF
   return (
     <li>
       <div className="flex min-h-10 items-center gap-2 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
-        <span className="flex h-6 w-9 shrink-0 items-center justify-center">
-          {children.length > 0 && <button className="flex h-6 w-9 items-center justify-center gap-0.5 rounded-md text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" onClick={onToggleCollapse} aria-expanded={!collapsed} aria-label={`${collapsed ? '展开' : '折叠'} ${task.title} 的 ${children.length} 个二级任务`} title={`${collapsed ? '展开' : '折叠'}二级任务`}><ChevronRight size={15} className={cn('transition-transform', !collapsed && 'rotate-90')} /><span className="text-[10px] tabular-nums">{children.length}</span></button>}
-        </span>
         <TaskCheck done={task.done} label={task.title} onClick={() => store.toggleGoalTask(goal.id, task.id)} />
         <input title="点击可直接修改任务名称" className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', task.done && 'text-slate-400 line-through')} value={task.title} onChange={(e) => store.updateGoalTask(goal.id, task.id, e.target.value)} aria-label="长期目标任务名称" />
+        {children.length > 0 && <button className="flex h-6 shrink-0 items-center justify-center gap-0.5 rounded-md px-1 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700" onClick={onToggleCollapse} aria-expanded={!collapsed} aria-label={`${collapsed ? '展开' : '折叠'} ${task.title} 的 ${children.length} 个二级任务`} title={`${collapsed ? '展开' : '折叠'}二级任务`}><ChevronRight size={15} className={cn('transition-transform', !collapsed && 'rotate-90')} /><span className="text-[10px] tabular-nums">{children.length}</span></button>}
         <TaskProgress percent={percent} />
         <TaskActionsMenu
           task={task}

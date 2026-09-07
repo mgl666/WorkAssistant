@@ -25,14 +25,16 @@ const PRESETS = [
   { label: '周末', days: [0, 6] },
 ];
 
-/** 某一天的完成情况：none=当天没有安排，miss=一项都没做，partial=做了一部分，done=全部完成 */
-type DayStatus = 'none' | 'miss' | 'partial' | 'done';
+/** 未来日期使用预打卡状态，不与过去/今天的实际完成状态混用。 */
+type DayStatus = 'none' | 'miss' | 'partial' | 'done' | 'future' | 'planned';
 
 const STATUS_CLS: Record<DayStatus, string> = {
   none: 'text-slate-400 dark:text-slate-600',
   miss: 'bg-rose-50 text-rose-500 dark:bg-rose-500/10',
   partial: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
   done: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
+  future: 'bg-slate-50 text-slate-400 dark:bg-slate-800/40',
+  planned: 'bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400',
 };
 
 export default function Daily() {
@@ -62,6 +64,7 @@ export default function Daily() {
     const due = tasksDueOn(key);
     if (due.length === 0) return 'none';
     const done = due.filter((t) => t.completedDates.includes(key)).length;
+    if (key > today) return done > 0 ? 'planned' : 'future';
     return done === due.length ? 'done' : done > 0 ? 'partial' : 'miss';
   };
 
@@ -123,6 +126,7 @@ export default function Daily() {
   const viewDue = tasksDueOn(viewDate);
   const viewDone = viewDue.filter((t) => t.completedDates.includes(viewDate)).length;
   const isToday = viewDate === today;
+  const isFutureView = viewDate > today;
 
   return (
     <div className="space-y-4">
@@ -194,7 +198,7 @@ export default function Daily() {
               <button
                 key={key}
                 onClick={() => setViewDate(key)}
-                aria-label={`${key}，${status === 'done' ? '全部完成' : status === 'partial' ? '部分完成' : status === 'miss' ? '未完成' : '无安排'}`}
+                aria-label={`${key}，${status === 'done' ? '全部完成' : status === 'partial' ? '部分完成' : status === 'miss' ? '未完成' : status === 'planned' ? '已预打卡' : status === 'future' ? '待预打卡' : '无安排'}`}
                 aria-pressed={isViewing}
                 className={cn(
                   'flex h-11 flex-col items-center justify-center rounded-lg text-xs outline-none transition sm:h-14',
@@ -216,7 +220,8 @@ export default function Daily() {
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-emerald-100 dark:bg-emerald-500/20" />全部完成</span>
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-amber-100 dark:bg-amber-500/20" />部分完成</span>
           <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-rose-100 dark:bg-rose-500/20" />未完成</span>
-          <span>点击任意一天可查看或补打卡</span>
+          <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded bg-sky-100 dark:bg-sky-500/20" />未来预打卡</span>
+          <span>过去可补打卡，未来可预打卡</span>
         </div>
       </div>
 
@@ -226,7 +231,7 @@ export default function Daily() {
           <div>
             <h2 className="font-semibold">{isToday ? '今天的必做' : `${viewDate} 的必做`}</h2>
             <p className="text-xs text-slate-400">
-              已完成 {viewDone}/{viewDue.length}
+              {isFutureView ? '已预打卡' : '已完成'} {viewDone}/{viewDue.length}
               {!isToday && <button className="ml-2 text-indigo-600 hover:underline dark:text-indigo-400" onClick={() => setViewDate(today)}>回到今天</button>}
             </p>
           </div>
@@ -237,10 +242,10 @@ export default function Daily() {
             {viewDue.map((task) => {
               const done = task.completedDates.includes(viewDate);
               return <li key={task.id}>
-                <button onClick={() => toggleDate(task.id, viewDate)} className={cn('flex w-full items-center gap-3 rounded-lg border p-3 text-left transition', done ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60')}>
-                  {done ? <CheckCircle2 className="text-emerald-600" size={20} /> : <Circle className="text-slate-400" size={20} />}
-                  <span className={cn('min-w-0 flex-1', done && 'text-slate-400 line-through')}><span className="block truncate text-sm font-medium">{task.title}</span>{task.note && <span className="block truncate text-xs text-slate-400">{task.note}</span>}</span>
-                  {!isToday && <span className="chip bg-slate-100 text-[10px] text-slate-500 dark:bg-slate-800">补打卡</span>}
+                <button onClick={() => toggleDate(task.id, viewDate)} className={cn('flex w-full items-center gap-3 rounded-lg border p-3 text-left transition', done && isFutureView ? 'border-sky-200 bg-sky-50/70 dark:border-sky-500/30 dark:bg-sky-500/10' : done ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60')}>
+                  {done ? <CheckCircle2 className={isFutureView ? 'text-sky-600' : 'text-emerald-600'} size={20} /> : <Circle className="text-slate-400" size={20} />}
+                  <span className={cn('min-w-0 flex-1', done && !isFutureView && 'text-slate-400 line-through')}><span className="block truncate text-sm font-medium">{task.title}</span>{task.note && <span className="block truncate text-xs text-slate-400">{task.note}</span>}</span>
+                  {!isToday && <span className={cn('chip text-[10px]', isFutureView ? 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800')}>{isFutureView ? done ? '已预打卡' : '预打卡' : '补打卡'}</span>}
                 </button>
               </li>;
             })}

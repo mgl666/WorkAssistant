@@ -1,6 +1,7 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import SyncManager from '@/components/SyncManager';
+import PomodoroRuntime from '@/components/PomodoroRuntime';
 import { ToastProvider } from '@/components/ui';
 import Dashboard from '@/pages/Dashboard';
 import CalendarPage from '@/pages/CalendarPage';
@@ -18,6 +19,7 @@ export default function App() {
     <HashRouter>
       <ToastProvider>
         <SyncManager />
+        <PomodoroRuntime />
         <Routes>
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />

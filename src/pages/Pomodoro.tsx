@@ -7,9 +7,9 @@ import {
   RotateCcw,
   SkipForward,
   Timer as TimerIcon,
-  VolumeX,
 } from 'lucide-react';
-import { cn, notify, playTimerAlarm, prepareTimerSound, requestNotifyPermission, stopTimerAlarm } from '@/lib/utils';
+import { cn, prepareTimerSound, requestNotifyPermission } from '@/lib/utils';
+import { stopGlobalTimerAlarm } from '@/components/PomodoroRuntime';
 import { formatClock, formatCountdown, formatMinutes, startOfWeek, todayKey, toKey } from '@/lib/date';
 import { useStore, type PomodoroMode, type PomodoroSession, type Settings } from '@/store/useStore';
 import { useDeletable } from '@/hooks/useDeletable';
@@ -46,7 +46,6 @@ export default function Pomodoro() {
   const todos = useStore((s) => s.todos);
   const timer = useStore((s) => s.timer);
   const updateTimer = useStore((s) => s.updateTimer);
-  const completeTimer = useStore((s) => s.completeTimer);
   const deletable = useDeletable();
 
   const durations = useMemo(
@@ -60,7 +59,6 @@ export default function Pomodoro() {
   const [remaining, setRemaining] = useState(() => endAt === null ? timer.remaining : Math.max(0, (endAt - Date.now()) / 1000));
 
   const running = endAt !== null;
-  const [alarmPlaying, setAlarmPlaying] = useState(false);
   const total = Math.max(1, durations[mode] * 60);
   const progress = Math.min(1, Math.max(0, 1 - remaining / total));
 
@@ -74,25 +72,10 @@ export default function Pomodoro() {
     return () => window.clearInterval(id);
   }, [endAt]);
 
-  /* 倒计时归零：记录会话并切换到下一阶段 */
+  /* 全局运行器完成阶段后，把页面显示同步到下一阶段的持久化时长。 */
   useEffect(() => {
-    if (endAt === null || remaining > 0) return;
-    const completed = completeTimer(endAt);
-    if (!completed) return;
-
-    setRemaining(completed.nextSeconds);
-    if (completed.sound && playTimerAlarm()) {
-      setAlarmPlaying(true);
-    }
-    notify(
-      completed.mode === 'focus' ? '专注结束，休息一下' : '休息结束，开始专注',
-      completed.task || undefined,
-    );
-  }, [remaining, endAt, completeTimer]);
-
-  useEffect(() => () => {
-    stopTimerAlarm();
-  }, []);
+    if (endAt === null) setRemaining(timer.remaining);
+  }, [endAt, timer.remaining]);
 
   /* 标签页标题显示剩余时间 */
   useEffect(() => {
@@ -103,8 +86,7 @@ export default function Pomodoro() {
   }, [running, remaining, mode]);
 
   const stopAlarm = () => {
-    stopTimerAlarm();
-    setAlarmPlaying(false);
+    stopGlobalTimerAlarm();
   };
 
   const switchMode = (next: PomodoroMode) => {
@@ -271,7 +253,6 @@ export default function Pomodoro() {
               <SkipForward size={16} />
               跳过
             </button>
-            {alarmPlaying && <button className="btn-outline py-2" onClick={stopAlarm} title="停止提示音"><VolumeX size={16} />停止铃声</button>}
           </div>
 
           <div className="mt-6 w-full space-y-2">
