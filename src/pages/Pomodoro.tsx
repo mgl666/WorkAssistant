@@ -248,8 +248,8 @@ export default function Pomodoro() {
       </div>
 
       {/* -------------------------------- 侧栏 -------------------------------- */}
-      <div className="space-y-4 lg:col-span-2">
-        <div className="card p-4">
+      <div className="flex flex-col gap-4 lg:col-span-2 lg:h-full">
+        <div className="card flex min-h-[140px] flex-1 flex-col p-4">
           <SectionTitle
             extra={
               todaySessions.length > 0 && (
@@ -266,12 +266,12 @@ export default function Pomodoro() {
             今日记录
           </SectionTitle>
           {todaySessions.length === 0 ? (
-            <p className="py-4 text-center text-sm text-slate-400">
-              <TimerIcon size={22} className="mx-auto mb-1 text-slate-300 dark:text-slate-600" />
-              还没有记录，开始一个番茄吧
+            <p className="flex min-h-0 flex-1 flex-col items-center justify-center py-4 text-center text-sm text-slate-400">
+              <TimerIcon size={22} className="mb-1 text-slate-300 dark:text-slate-600" />
+              <span>还没有记录，开始一个番茄吧</span>
             </p>
           ) : (
-            <ul className="max-h-64 space-y-1 overflow-y-auto">
+            <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
               {todaySessions.map((s) => (
                 <li
                   key={s.id}
