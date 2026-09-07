@@ -148,6 +148,26 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
             }}
           />
         ) : <h2 className="min-w-0 flex-1 truncate text-xl font-medium text-slate-800 dark:text-slate-100">{goal.title}</h2>}
+        <div className="flex shrink-0 items-center rounded-lg border border-slate-200 p-0.5 dark:border-slate-700 sm:hidden" aria-label="调整目标顺序">
+          <button
+            disabled={index === 0}
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-slate-800"
+            onClick={() => onMove(index - 1)}
+            title="向前移动"
+            aria-label={`将「${goal.title}」向前移动`}
+          >
+            <ArrowLeft size={17} />
+          </button>
+          <button
+            disabled={index === total - 1}
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-slate-800"
+            onClick={() => onMove(index + 1)}
+            title="向后移动"
+            aria-label={`将「${goal.title}」向后移动`}
+          >
+            <ArrowRight size={17} />
+          </button>
+        </div>
         <button className="btn-ghost -mr-2 px-2" aria-label={`${goal.title}菜单`} onClick={() => setMenuOpen((open) => !open)}><MoreVertical size={19} /></button>
         {menuOpen && (
           <div className="absolute right-0 top-9 z-10 w-32 rounded-lg border border-slate-200 bg-white p-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
