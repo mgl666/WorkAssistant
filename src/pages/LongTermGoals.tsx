@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronRight, CornerDownRight, GripVertical, MoreVertical, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, CornerDownRight, GripVertical, MoreVertical, Pencil, Plus, Target, Trash2, X } from 'lucide-react';
 import { Empty, useToast } from '@/components/ui';
 import { useDeletable } from '@/hooks/useDeletable';
 import { cn } from '@/lib/utils';
 import { useStore, type GoalTask, type LongTermGoal } from '@/store/useStore';
 
-const HOVER_ACTIONS = 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100';
+const HOVER_ACTIONS = 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100 sm:focus-within:opacity-100';
 
 export default function LongTermGoals() {
   const goals = useStore((s) => s.goals);
@@ -96,9 +96,9 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
 
   const roots = useMemo(() => goal.tasks
     .filter((task) => !task.parentId || !goal.tasks.some((candidate) => candidate.id === task.parentId))
-    .sort((a, b) => a.createdAt - b.createdAt), [goal.tasks]);
+    .sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt)), [goal.tasks]);
   const pending = roots.filter((task) => !task.done);
-  const completed = roots.filter((task) => task.done).sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0));
+  const completed = roots.filter((task) => task.done);
 
   const addTask = () => {
     if (!taskTitle.trim()) return;
@@ -195,14 +195,14 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
         {pending.length === 0 && completed.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">添加任务，开始推进这个目标</p> : (
           <>
             <ul className="space-y-1">
-              {pending.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}
+              {pending.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} siblings={pending} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}
             </ul>
             {completed.length > 0 && (
               <section className="mt-3 border-t border-slate-100 pt-2 dark:border-slate-800">
                 <button className="flex w-full items-center gap-2 rounded-md py-1 text-left text-sm font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" onClick={() => setCompletedOpen((open) => !open)} aria-expanded={completedOpen}>
                   <ChevronRight size={16} className={cn('transition-transform', completedOpen && 'rotate-90')} />已完成 ({completed.length})
                 </button>
-                {completedOpen && <ul className="mt-1 space-y-1">{completed.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}</ul>}
+                {completedOpen && <ul className="mt-1 space-y-1">{completed.map((task) => <GoalTaskRow key={task.id} goal={goal} task={task} siblings={completed} childFor={childFor} childTitle={childTitle} setChildFor={setChildFor} setChildTitle={setChildTitle} addChild={addChild} />)}</ul>}
               </section>
             )}
           </>
@@ -215,6 +215,7 @@ function GoalCard({ goal, index, total, dragging, onDragStart, onDragEnd, onDrop
 interface GoalTaskRowProps {
   goal: LongTermGoal;
   task: GoalTask;
+  siblings: GoalTask[];
   childFor: string | null;
   childTitle: string;
   setChildFor: (id: string | null) => void;
@@ -222,10 +223,11 @@ interface GoalTaskRowProps {
   addChild: (parentId: string) => void;
 }
 
-function GoalTaskRow({ goal, task, childFor, childTitle, setChildFor, setChildTitle, addChild }: GoalTaskRowProps) {
+function GoalTaskRow({ goal, task, siblings, childFor, childTitle, setChildFor, setChildTitle, addChild }: GoalTaskRowProps) {
   const store = useStore();
   const toast = useToast();
-  const children = goal.tasks.filter((child) => child.parentId === task.id).sort((a, b) => a.createdAt - b.createdAt);
+  const children = goal.tasks.filter((child) => child.parentId === task.id).sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
+  const percent = children.length ? Math.round(children.filter((child) => child.done).length / children.length * 100) : task.done ? 100 : 0;
   const removeTask = (taskId: string, title: string, child = false) => {
     store.removeGoalTask(goal.id, taskId);
     toast(child ? `已删除子任务「${title}」` : `已删除任务「${title}」`);
@@ -236,6 +238,8 @@ function GoalTaskRow({ goal, task, childFor, childTitle, setChildFor, setChildTi
       <div className="group flex min-h-10 items-center gap-3 rounded-lg px-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/60">
         <TaskCheck done={task.done} label={task.title} onClick={() => store.toggleGoalTask(goal.id, task.id)} />
         <input className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', task.done && 'text-slate-400 line-through')} value={task.title} onChange={(e) => store.updateGoalTask(goal.id, task.id, e.target.value)} aria-label="长期目标任务名称" />
+        <TaskProgress percent={percent} />
+        <TaskOrderButtons task={task} siblings={siblings} onMove={(targetId) => store.moveGoalTask(goal.id, task.id, targetId)} />
         {!task.done && <button className={cn('btn-ghost px-1.5', HOVER_ACTIONS)} title="添加二级子任务" aria-label={`为 ${task.title} 添加二级子任务`} onClick={() => { setChildFor(childFor === task.id ? null : task.id); setChildTitle(''); }}><Plus size={15} /></button>}
         <button className={cn('btn-danger px-1.5', HOVER_ACTIONS)} title="删除任务" aria-label={`删除 ${task.title}`} onClick={() => removeTask(task.id, task.title)}><Trash2 size={14} /></button>
       </div>
@@ -244,6 +248,7 @@ function GoalTaskRow({ goal, task, childFor, childTitle, setChildFor, setChildTi
           <CornerDownRight size={14} className="shrink-0 text-slate-300 dark:text-slate-600" />
           <TaskCheck done={child.done} label={child.title} small onClick={() => store.toggleGoalTask(goal.id, child.id)} />
           <input className={cn('min-w-0 flex-1 bg-transparent text-sm outline-none', child.done && 'text-slate-400 line-through')} value={child.title} onChange={(e) => store.updateGoalTask(goal.id, child.id, e.target.value)} aria-label="二级子任务名称" />
+          <TaskOrderButtons task={child} siblings={children} onMove={(targetId) => store.moveGoalTask(goal.id, child.id, targetId)} />
           <button className={cn('btn-danger px-1.5', HOVER_ACTIONS)} title="删除子任务" aria-label={`删除 ${child.title}`} onClick={() => removeTask(child.id, child.title, true)}><Trash2 size={13} /></button>
         </li>
       ))}</ul>}
@@ -255,6 +260,27 @@ function GoalTaskRow({ goal, task, childFor, childTitle, setChildFor, setChildTi
         </div>
       )}
     </li>
+  );
+}
+
+function TaskProgress({ percent }: { percent: number }) {
+  return (
+    <span className="w-10 shrink-0" title={`完成度 ${percent}%`} aria-label={`完成度 ${percent}%`}>
+      <span className="block text-center text-[10px] tabular-nums text-slate-400">{percent}%</span>
+      <span className="mt-0.5 block h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <span className="block h-full rounded-full bg-indigo-500 transition-[width]" style={{ width: `${percent}%` }} />
+      </span>
+    </span>
+  );
+}
+
+function TaskOrderButtons({ task, siblings, onMove }: { task: GoalTask; siblings: GoalTask[]; onMove: (targetId: string) => void }) {
+  const index = siblings.findIndex((item) => item.id === task.id);
+  return (
+    <span className={cn('flex shrink-0 items-center', HOVER_ACTIONS)}>
+      <button disabled={index <= 0} className="rounded p-0.5 text-slate-400 hover:bg-slate-200 disabled:opacity-20 dark:hover:bg-slate-700" title="上移" aria-label={`上移 ${task.title}`} onClick={() => index > 0 && onMove(siblings[index - 1].id)}><ChevronUp size={13} /></button>
+      <button disabled={index < 0 || index >= siblings.length - 1} className="rounded p-0.5 text-slate-400 hover:bg-slate-200 disabled:opacity-20 dark:hover:bg-slate-700" title="下移" aria-label={`下移 ${task.title}`} onClick={() => index >= 0 && index < siblings.length - 1 && onMove(siblings[index + 1].id)}><ChevronDown size={13} /></button>
+    </span>
   );
 }
 

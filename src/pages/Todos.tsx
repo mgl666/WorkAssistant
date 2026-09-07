@@ -118,12 +118,13 @@ export default function Todos() {
 
 function TaskSection({ title, items, expanded, setExpanded }: { title: string; items: Todo[]; expanded: string | null; setExpanded: (id: string | null) => void }) {
   const store = useStore(); const today = todayKey(); const deletable = useDeletable();
-  return <section><SectionTitle>{title}</SectionTitle>{items.length === 0 ? <p className="py-2 text-sm text-slate-400">暂无</p> : <ul className="space-y-1">{items.map((todo) => { const children = store.todos.filter((child) => child.parentId === todo.id).sort((a, b) => a.createdAt - b.createdAt); return <li key={todo.id} className="rounded-lg border border-slate-100 dark:border-slate-800">
+  return <section><SectionTitle>{title}</SectionTitle>{items.length === 0 ? <p className="py-2 text-sm text-slate-400">暂无</p> : <ul className="space-y-1">{items.map((todo) => { const children = store.todos.filter((child) => child.parentId === todo.id).sort((a, b) => a.createdAt - b.createdAt); const percent = children.length ? Math.round(children.filter((child) => child.done).length / children.length * 100) : todo.done ? 100 : 0; return <li key={todo.id} className="rounded-lg border border-slate-100 dark:border-slate-800">
     <div className="flex flex-wrap items-center gap-2 px-2 py-2 sm:flex-nowrap">
       <button onClick={() => store.toggleTodo(todo.id)} aria-label={todo.done ? '标记未完成' : '标记已完成'} className={cn('flex h-5 w-5 items-center justify-center rounded-full border', todo.done ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300')}>
         {todo.done && <Check size={13} />}
       </button>
       <button className="min-w-0 flex-1 text-left" onClick={() => setExpanded(expanded === todo.id ? null : todo.id)}><span className={cn('block truncate text-sm', todo.done && 'text-slate-400 line-through')}>{todo.title}</span></button>
+      <TodoProgress percent={percent} />
       <span className={cn('chip shrink-0 text-[11px]', PRIORITY[todo.priority].cls)}>{PRIORITY[todo.priority].label.split(' · ')[1]}</span>
       {todo.due && <span className={cn('order-last ml-7 flex w-full items-center gap-1 text-xs sm:order-none sm:ml-0 sm:w-auto', !todo.done && todo.due < today ? 'text-rose-600' : 'text-slate-400')}><CalendarClock size={12} />{relativeDay(todo.due) || formatShort(todo.due)}{todo.dueTime ? ` ${todo.dueTime}` : ''}</span>}
       <button className="btn-ghost px-2 sm:px-1" onClick={() => setExpanded(expanded === todo.id ? null : todo.id)} aria-label={expanded === todo.id ? `收起任务 ${todo.title}` : `展开任务 ${todo.title}`}><ChevronDown size={14} className={cn('transition', expanded === todo.id && 'rotate-180')} /></button>
@@ -144,6 +145,13 @@ function TaskSection({ title, items, expanded, setExpanded }: { title: string; i
       <div className="sm:col-span-4"><SubtaskAdder parent={todo} /></div>
     </div>}
   </li>; })}</ul>}</section>;
+}
+
+function TodoProgress({ percent }: { percent: number }) {
+  return <span className="w-14 shrink-0" title={`完成度 ${percent}%`} aria-label={`完成度 ${percent}%`}>
+    <span className="block text-center text-[10px] tabular-nums text-slate-400">{percent}%</span>
+    <span className="mt-0.5 block h-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><span className="block h-full rounded-full bg-indigo-500 transition-[width]" style={{ width: `${percent}%` }} /></span>
+  </span>;
 }
 
 function SubtaskAdder({ parent }: { parent: Todo }) {
