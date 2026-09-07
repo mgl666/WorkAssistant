@@ -94,7 +94,7 @@ export const useStore = create<State>()(persist((set, get) => ({
   removeEvent: (id) => set((s) => { const target = s.events.find((e) => e.id === id); if (!target) return s; return { events: s.events.filter((e) => e.id !== id), tombstones: pushTombstone(s.tombstones, tombstoneOf('events', target, Date.now())), dirty: dropDirty(s.dirty, 'events', id) }; }),
   toggleEvent: (id) => set((s) => ({ events: s.events.map((e) => e.id === id ? { ...e, done: !e.done, updatedAt: Date.now() } : e), dirty: withDirty(s.dirty, 'events', id) })),
 
-  addTodo: (t) => { const id = uid(), now = Date.now(); set((s) => ({ todos: [...s.todos, { id, title: t.title ?? '', note: t.note ?? '', due: t.due ?? '', dueTime: t.dueTime, listId: t.listId ?? DEFAULT_LIST_ID, parentId: t.parentId, done: false, starred: t.starred ?? false, priority: t.priority ?? 3, createdAt: now, updatedAt: now }], dirty: withDirty(s.dirty, 'todos', id) })); return id; },
+  addTodo: (t) => { const id = uid(), now = Date.now(); set((s) => ({ todos: [...s.todos, { id, title: t.title ?? '', note: t.note ?? '', due: t.due ?? '', dueTime: t.dueTime, listId: t.listId ?? s.lists[0]?.id ?? '', parentId: t.parentId, done: false, starred: t.starred ?? false, priority: t.priority ?? 3, createdAt: now, updatedAt: now }], dirty: withDirty(s.dirty, 'todos', id) })); return id; },
   updateTodo: (id, patch) => set((s) => ({ todos: s.todos.map((t) => t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t), dirty: withDirty(s.dirty, 'todos', id) })),
   removeTodo: (id) => set((s) => { const targets = s.todos.filter((t) => t.id === id || t.parentId === id); if (!targets.length) return s; const now = Date.now(); return { todos: s.todos.filter((t) => !targets.some((target) => target.id === t.id)), tombstones: targets.reduce((list, target) => pushTombstone(list, tombstoneOf('todos', target, now)), s.tombstones), dirty: dropDirtyMany(s.dirty, 'todos', targets.map((target) => target.id)) }; }),
   toggleTodo: (id) => set((s) => {
@@ -127,7 +127,7 @@ export const useStore = create<State>()(persist((set, get) => ({
 
   addList: (name) => { const id = uid(); set((s) => ({ lists: [...s.lists, { id, name: name.trim() || '新清单', updatedAt: Date.now() }], dirty: withDirty(s.dirty, 'lists', id) })); return id; },
   renameList: (id, name) => set((s) => ({ lists: s.lists.map((l) => l.id === id ? { ...l, name, updatedAt: Date.now() } : l), dirty: withDirty(s.dirty, 'lists', id) })),
-  removeList: (id) => set((s) => { if (id === DEFAULT_LIST_ID) return s; const list = s.lists.find((l) => l.id === id); if (!list) return s; const now = Date.now(), children = s.todos.filter((t) => t.listId === id); return { lists: s.lists.filter((l) => l.id !== id), todos: s.todos.filter((t) => t.listId !== id), tombstones: children.reduce((a, t) => pushTombstone(a, tombstoneOf('todos', t, now)), pushTombstone(s.tombstones, tombstoneOf('lists', list, now))), dirty: dropDirty(dropDirtyMany(s.dirty, 'todos', children.map((t) => t.id)), 'lists', id) }; }),
+  removeList: (id) => set((s) => { const list = s.lists.find((l) => l.id === id); if (!list) return s; const now = Date.now(), children = s.todos.filter((t) => t.listId === id); return { lists: s.lists.filter((l) => l.id !== id), todos: s.todos.filter((t) => t.listId !== id), tombstones: children.reduce((a, t) => pushTombstone(a, tombstoneOf('todos', t, now)), pushTombstone(s.tombstones, tombstoneOf('lists', list, now))), dirty: dropDirty(dropDirtyMany(s.dirty, 'todos', children.map((t) => t.id)), 'lists', id) }; }),
 
   addNote: () => { const id = uid(), now = Date.now(); set((s) => ({ notes: [{ id, title: '', content: '', pinned: false, createdAt: now, updatedAt: now }, ...s.notes], dirty: withDirty(s.dirty, 'notes', id) })); return id; },
   updateNote: (id, patch) => set((s) => ({ notes: s.notes.map((n) => n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n), dirty: withDirty(s.dirty, 'notes', id) })),
@@ -323,7 +323,7 @@ export const useStore = create<State>()(persist((set, get) => ({
       const incoming = {
         events: stamp<CalEvent>(data.events),
         todos: stamp<Todo>(data.todos, 1000).map((t) => ({ ...t, priority: t.priority ?? 3 })),
-        lists: Array.isArray(data.lists) && data.lists.length ? stamp<TodoList>(data.lists, 2000) : blankWorkspace().lists,
+        lists: Array.isArray(data.lists) ? stamp<TodoList>(data.lists, 2000) : blankWorkspace().lists,
         notes: stamp<Note>(data.notes, 3000),
         sessions: stamp<PomodoroSession>(data.sessions, 4000),
         daily_tasks: stamp<DailyTask>(data.daily_tasks, 5000).map(normalizeDailyTask),
@@ -373,7 +373,7 @@ export const useStore = create<State>()(persist((set, get) => ({
     return { ...blank, settings: { ...blank.settings, theme: s.settings.theme, aiEndpoint: s.settings.aiEndpoint, aiModel: s.settings.aiModel, aiApiKey: s.settings.aiApiKey }, tombstones, sync: { ...s.sync } };
   }),
 }), {
-  name: 'work-assistant-v1', version: 9,
+  name: 'work-assistant-v1', version: 10,
   migrate: (persisted) => {
     const s = (persisted ?? {}) as Partial<State>, now = Date.now();
     const stamp = <T extends { updatedAt?: number }>(arr: T[] | undefined, offset = 0) => (Array.isArray(arr) ? arr : []).map((r, i) => ({ ...r, updatedAt: r.updatedAt ?? now + offset + i }));
@@ -381,6 +381,6 @@ export const useStore = create<State>()(persist((set, get) => ({
     const dirty: Record<string, 1> = { ...(s.dirty ?? {}) }, collections: Record<SyncTable, Array<{ id: string }>> = { events, todos, lists, notes, sessions, daily_tasks, goals };
     SYNC_TABLES.forEach((table) => collections[table].forEach((r) => { dirty[syncKey(table, r.id)] = 1; }));
     const workspaces = Object.fromEntries(Object.entries(s.workspaces ?? {}).map(([key, workspace]) => [key, { ...workspace, daily_tasks: (workspace.daily_tasks ?? []).map(normalizeDailyTask), goals: (workspace.goals ?? []).map((goal, index) => ({ ...goal, order: Number.isFinite(goal.order) ? goal.order : index, tasks: (goal.tasks ?? []).map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) })), timer: workspace.timer ?? defaultTimer() }]));
-    return { ...s, events, todos, lists: lists.length ? lists : blankWorkspace().lists, notes, sessions, daily_tasks, goals, timer: s.timer ?? defaultTimer(), dirty, tombstones: Array.isArray(s.tombstones) ? s.tombstones : [], settings: { ...defaultSettings, ...(s.settings ?? {}) }, workspaceKey: s.workspaceKey ?? GUEST_WORKSPACE, workspaces, sync: { ...defaultSync, ...(s.sync ?? {}) } } as State;
+    return { ...s, events, todos, lists: Array.isArray(s.lists) ? lists : blankWorkspace().lists, notes, sessions, daily_tasks, goals, timer: s.timer ?? defaultTimer(), dirty, tombstones: Array.isArray(s.tombstones) ? s.tombstones : [], settings: { ...defaultSettings, ...(s.settings ?? {}) }, workspaceKey: s.workspaceKey ?? GUEST_WORKSPACE, workspaces, sync: { ...defaultSync, ...(s.sync ?? {}) } } as State;
   },
 }));

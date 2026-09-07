@@ -66,7 +66,8 @@ export default function Todos() {
   const completed = useMemo(() => visibleRoots.filter((t) => t.done).sort((a, b) => (b.completedAt ?? 0) - (a.completedAt ?? 0)), [visibleRoots]);
   const submit = () => {
     if (!title.trim()) return;
-    store.addTodo({ title: title.trim(), due, dueTime: dueTime || undefined, priority, listId: activeList === 'all' ? DEFAULT_LIST_ID : activeList });
+    const defaultList = store.lists.find((list) => list.id === DEFAULT_LIST_ID) ?? store.lists[0];
+    store.addTodo({ title: title.trim(), due, dueTime: dueTime || undefined, priority, listId: activeList === 'all' ? (defaultList?.id ?? '') : activeList });
     setTitle(''); setDue(''); setDueTime(''); setPriority(3);
   };
 
@@ -81,7 +82,7 @@ export default function Todos() {
         {editingList === list.id ? <input autoFocus className="input h-10 py-0.5 text-sm sm:h-7" aria-label={`重命名清单 ${list.name}`} defaultValue={list.name} onBlur={(e) => { store.renameList(list.id, e.target.value.trim() || list.name); setEditingList(null); }} onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()} /> : <>
           <button className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setActiveList(list.id)}><ListChecks size={15} className="text-slate-400" /><span className="truncate text-sm">{list.name}</span><span className="ml-auto text-xs text-slate-400">{allRoots.filter((t) => t.listId === list.id).length}</span></button>
           <button className="btn-ghost inline-flex px-2 sm:px-1 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100" title="重命名" aria-label={`重命名清单 ${list.name}`} onClick={() => setEditingList(list.id)}><Pencil size={13} /></button>
-          {list.id !== DEFAULT_LIST_ID && <button className="btn-danger inline-flex px-2 sm:px-1 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100" title="删除清单" aria-label={`删除清单 ${list.name}`} onClick={() => deletable(`已删除清单「${list.name}」及其中任务`, () => { store.removeList(list.id); if (activeList === list.id) setActiveList('all'); }, { confirm: `删除清单「${list.name}」会连同其中所有任务一起删除，确定继续吗？` })}><X size={13} /></button>}
+          <button className="btn-danger inline-flex px-2 sm:px-1 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100" title="删除清单" aria-label={`删除清单 ${list.name}`} onClick={() => deletable(`已删除清单「${list.name}」及其中任务`, () => { store.removeList(list.id); if (activeList === list.id) setActiveList('all'); }, { confirm: `删除清单「${list.name}」会连同其中所有任务一起删除，确定继续吗？` })}><X size={13} /></button>
         </>}
       </li>)}</ul>
     </aside>
