@@ -20,7 +20,7 @@ export interface PomodoroSession { id: string; mode: PomodoroMode; minutes: numb
 export interface PomodoroTimer { mode: PomodoroMode; remaining: number; endAt: number | null; completedEndAt?: number; alarmAt?: number; round: number; task: string }
 export interface PomodoroCompletion { mode: PomodoroMode; task: string; nextMode: PomodoroMode; nextSeconds: number; sound: boolean }
 export type PeriodicFrequency = 'daily' | 'weekly' | 'monthly';
-export interface DailyTask { id: string; title: string; note: string; frequency: PeriodicFrequency; startDate: string; daysOfWeek: number[]; dayOfMonth?: number; completedDates: string[]; enabled: boolean; order: number; createdAt: number; updatedAt: number }
+export interface DailyTask { id: string; title: string; note: string; frequency: PeriodicFrequency; startDate: string; daysOfWeek: number[]; completedDates: string[]; enabled: boolean; order: number; createdAt: number; updatedAt: number }
 export interface GoalTask { id: string; title: string; parentId?: string; done: boolean; completedAt?: number; order: number; createdAt: number }
 export interface LongTermGoal { id: string; title: string; tasks: GoalTask[]; order: number; createdAt: number; updatedAt: number }
 export interface Settings {
@@ -43,7 +43,7 @@ interface State extends Omit<WorkspaceSnapshot, 'lastPulledAt' | 'lastSyncAt'> {
   addNote: () => string; updateNote: (id: string, patch: Partial<Note>) => void; removeNote: (id: string) => void;
   addSession: (s: Omit<PomodoroSession, 'id' | 'updatedAt'>) => void; updateSession: (id: string, task: string) => void; removeSession: (id: string) => void; clearSessions: (dateKey?: string) => void;
   updateTimer: (patch: Partial<PomodoroTimer>) => void; completeTimer: (expectedEndAt: number) => PomodoroCompletion | null;
-  addDailyTask: (t: Pick<DailyTask, 'title' | 'note' | 'frequency' | 'startDate' | 'daysOfWeek' | 'dayOfMonth'>) => string; updateDailyTask: (id: string, patch: Partial<DailyTask>) => void; removeDailyTask: (id: string) => void; toggleDailyTaskDate: (id: string, date: string) => void; moveDailyTask: (id: string, toIndex: number) => void;
+  addDailyTask: (t: Pick<DailyTask, 'title' | 'note' | 'frequency' | 'startDate' | 'daysOfWeek'>) => string; updateDailyTask: (id: string, patch: Partial<DailyTask>) => void; removeDailyTask: (id: string) => void; toggleDailyTaskDate: (id: string, completionKey: string) => void; moveDailyTask: (id: string, toIndex: number) => void;
   addGoal: (title: string) => string; renameGoal: (id: string, title: string) => void; removeGoal: (id: string) => void; moveGoal: (id: string, toIndex: number) => void;
   addGoalTask: (goalId: string, title: string, parentId?: string) => string; updateGoalTask: (goalId: string, taskId: string, title: string) => void; removeGoalTask: (goalId: string, taskId: string) => void; toggleGoalTask: (goalId: string, taskId: string) => void; moveGoalTask: (goalId: string, taskId: string, targetId: string) => void;
   updateSettings: (patch: Partial<Settings>) => void; applyRemote: (table: SyncTable, rows: SyncRecord[]) => number; removeRemote: (table: SyncTable, ids: string[]) => void;
@@ -60,15 +60,10 @@ function dropDirtyMany(dirty: Record<string, 1>, table: SyncTable, ids: string[]
 function tombstoneOf(table: SyncTable, record: unknown, at: number): Tombstone { return { table, id: (record as { id: string }).id, deletedAt: at, updatedAt: at, snapshot: record as Record<string, unknown> }; }
 function pushTombstone(list: Tombstone[], t: Tombstone) { return [...list.filter((x) => !(x.table === t.table && x.id === t.id)), t]; }
 function normalizeDailyTask(task: DailyTask): DailyTask {
-  const daysOfWeek = Array.isArray(task.daysOfWeek) && task.daysOfWeek.length ? task.daysOfWeek : [0, 1, 2, 3, 4, 5, 6];
   const createdAt = Number.isFinite(task.createdAt) ? task.createdAt : Date.now();
-  const frequency: PeriodicFrequency = task.frequency ?? (daysOfWeek.length === 7 ? 'daily' : 'weekly');
   return {
     ...task,
-    frequency,
-    startDate: task.startDate || toKey(new Date(createdAt)),
-    daysOfWeek,
-    dayOfMonth: task.dayOfMonth ?? new Date(createdAt).getDate(),
+    daysOfWeek: task.frequency === 'daily' && Array.isArray(task.daysOfWeek) ? task.daysOfWeek : [],
     completedDates: Array.isArray(task.completedDates) ? task.completedDates : [],
     enabled: task.enabled ?? true,
     order: Number.isFinite(task.order) ? task.order : createdAt,
@@ -204,7 +199,7 @@ export const useStore = create<State>()(persist((set, get) => ({
   addDailyTask: (t) => { const id = uid(), now = Date.now(); set((s) => ({ daily_tasks: [...s.daily_tasks, { ...t, id, enabled: true, completedDates: [], order: Math.max(-1, ...s.daily_tasks.map((task) => task.order ?? task.createdAt)) + 1, createdAt: now, updatedAt: now }], dirty: withDirty(s.dirty, 'daily_tasks', id) })); return id; },
   updateDailyTask: (id, patch) => set((s) => ({ daily_tasks: s.daily_tasks.map((t) => t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t), dirty: withDirty(s.dirty, 'daily_tasks', id) })),
   removeDailyTask: (id) => set((s) => { const target = s.daily_tasks.find((t) => t.id === id); if (!target) return s; return { daily_tasks: s.daily_tasks.filter((t) => t.id !== id), tombstones: pushTombstone(s.tombstones, tombstoneOf('daily_tasks', target, Date.now())), dirty: dropDirty(s.dirty, 'daily_tasks', id) }; }),
-  toggleDailyTaskDate: (id, date) => set((s) => ({ daily_tasks: s.daily_tasks.map((t) => t.id === id ? { ...t, completedDates: t.completedDates.includes(date) ? t.completedDates.filter((d) => d !== date) : [...t.completedDates, date], updatedAt: Date.now() } : t), dirty: withDirty(s.dirty, 'daily_tasks', id) })),
+  toggleDailyTaskDate: (id, completionKey) => set((s) => ({ daily_tasks: s.daily_tasks.map((t) => t.id === id ? { ...t, completedDates: t.completedDates.includes(completionKey) ? t.completedDates.filter((key) => key !== completionKey) : [...t.completedDates, completionKey], updatedAt: Date.now() } : t), dirty: withDirty(s.dirty, 'daily_tasks', id) })),
   moveDailyTask: (id, toIndex) => set((s) => {
     const ordered = [...s.daily_tasks].sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt));
     const fromIndex = ordered.findIndex((task) => task.id === id);
@@ -373,7 +368,7 @@ export const useStore = create<State>()(persist((set, get) => ({
     return { ...blank, settings: { ...blank.settings, theme: s.settings.theme, aiEndpoint: s.settings.aiEndpoint, aiModel: s.settings.aiModel, aiApiKey: s.settings.aiApiKey }, tombstones, sync: { ...s.sync } };
   }),
 }), {
-  name: 'work-assistant-v1', version: 10,
+  name: 'work-assistant-v1', version: 11,
   migrate: (persisted) => {
     const s = (persisted ?? {}) as Partial<State>, now = Date.now();
     const stamp = <T extends { updatedAt?: number }>(arr: T[] | undefined, offset = 0) => (Array.isArray(arr) ? arr : []).map((r, i) => ({ ...r, updatedAt: r.updatedAt ?? now + offset + i }));

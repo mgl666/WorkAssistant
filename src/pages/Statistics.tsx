@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { BarChart3, CheckCircle2, Clock3, Flame, Repeat2 } from 'lucide-react';
 import { formatMinutes, startOfWeek, todayKey, toKey } from '@/lib/date';
-import { dateKeysBetween, PERIODIC_FREQUENCY_LABELS, periodicFrequencyOf, periodicTaskDueOn } from '@/lib/periodic';
+import { dateKeysBetween, PERIODIC_FREQUENCY_LABELS, periodicFrequencyOf, periodicOccurrenceKeys, periodicTaskCompleted, periodicTaskDueOn } from '@/lib/periodic';
 import { cn } from '@/lib/utils';
 import { useStore, type PomodoroSession } from '@/store/useStore';
 import { Empty, SectionTitle } from '@/components/ui';
@@ -47,16 +47,16 @@ export default function Statistics() {
   }), [activeSessions, start, end]);
 
   const taskRows = useMemo(() => [...tasks].sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt)).map((task) => {
-    const expectedKeys = keys.filter((key) => periodicTaskDueOn(task, key));
-    const done = expectedKeys.filter((key) => task.completedDates.includes(key)).length;
+    const expectedKeys = periodicOccurrenceKeys(task, start, end);
+    const done = expectedKeys.filter((key) => periodicTaskCompleted(task, key)).length;
     return { task, expected: expectedKeys.length, done, rate: expectedKeys.length ? Math.round(done / expectedKeys.length * 100) : 0 };
-  }).filter((row) => row.expected > 0 || row.done > 0), [tasks, keys]);
+  }).filter((row) => row.expected > 0 || row.done > 0), [tasks, start, end]);
   const expectedTotal = taskRows.reduce((sum, row) => sum + row.expected, 0);
   const completedTotal = taskRows.reduce((sum, row) => sum + row.done, 0);
   const completionRate = expectedTotal ? Math.round(completedTotal / expectedTotal * 100) : 0;
   const allDoneDays = keys.filter((key) => {
     const due = tasks.filter((task) => periodicTaskDueOn(task, key));
-    return due.length > 0 && due.every((task) => task.completedDates.includes(key));
+    return due.length > 0 && due.every((task) => periodicTaskCompleted(task, key));
   }).length;
 
   const focusMinutes = focusSessions.reduce((sum, session) => sum + session.minutes, 0);
@@ -74,7 +74,7 @@ export default function Statistics() {
 
   const trendRows = useMemo(() => keys.map((key) => {
     const due = tasks.filter((task) => periodicTaskDueOn(task, key));
-    const done = due.filter((task) => task.completedDates.includes(key)).length;
+    const done = due.filter((task) => periodicTaskCompleted(task, key)).length;
     const daySessions = focusSessions.filter((session) => toKey(new Date(session.endedAt)) === key);
     return { key, expected: due.length, done, focusCount: daySessions.length, focusMinutes: daySessions.reduce((sum, session) => sum + session.minutes, 0) };
   }).reverse(), [keys, tasks, focusSessions]);
@@ -96,12 +96,12 @@ export default function Statistics() {
     </section>
 
     <p className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-3 py-2 text-xs leading-5 text-indigo-700 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-300">
-      当前统计：{rangeLabel}（{start} 至 {end}）。周期任务只从各自的开始日期起计入应完成次数，因此最近新建的任务在本周、本月和本年中可能显示相同结果。
+      当前统计：{rangeLabel}（{start} 至 {end}）。每日任务按应执行日期统计，每周、每月任务分别每周、每月计一次，并且只从各自的开始日期起计入。
     </p>
 
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Metric icon={CheckCircle2} label={`${rangeLabel}周期任务完成率`} value={`${completionRate}%`} detail={`${completedTotal}/${expectedTotal} 次 · ${start.slice(5)}–${end.slice(5)}`} color="emerald" />
-      <Metric icon={Repeat2} label="全部完成天数" value={`${allDoneDays} 天`} detail={`统计 ${keys.length} 天`} color="sky" />
+      <Metric icon={Repeat2} label="每日任务全完成天数" value={`${allDoneDays} 天`} detail={`统计 ${keys.length} 天`} color="sky" />
       <Metric icon={Flame} label="专注次数" value={`${focusSessions.length} 次`} detail={`${focusDays} 个专注日`} color="amber" />
       <Metric icon={Clock3} label="专注总时长" value={formatMinutes(focusMinutes)} detail={`平均 ${formatMinutes(averageFocus)}/次`} color="indigo" />
     </section>
@@ -111,7 +111,7 @@ export default function Statistics() {
       <section className="card min-h-[360px] p-4"><SectionTitle>专注内容排行</SectionTitle>{contentRows.length === 0 ? <Empty icon={Flame} text="所选时间内没有专注记录" /> : <div className="max-h-[420px] overflow-auto"><table className="w-full min-w-[440px] text-sm"><thead className="sticky top-0 bg-white text-xs text-slate-400 dark:bg-slate-900"><tr><th className="py-2 text-left font-medium">本轮内容或备注</th><th className="px-2 text-right font-medium">次数</th><th className="py-2 text-right font-medium">时长</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{contentRows.map((row) => <tr key={row.name}><td className="max-w-72 truncate py-2.5 font-medium">{row.name}</td><td className="px-2 text-right tabular-nums">{row.count}</td><td className="py-2 text-right tabular-nums">{formatMinutes(row.minutes)}</td></tr>)}</tbody></table></div>}</section>
     </div>
 
-    <section className="card p-4"><SectionTitle>每日趋势明细</SectionTitle><div className="max-h-[460px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800"><table className="w-full min-w-[620px] text-sm"><thead className="sticky top-0 bg-slate-50 text-xs text-slate-400 dark:bg-slate-800"><tr><th className="px-4 py-2.5 text-left font-medium">日期</th><th className="px-4 text-right font-medium">周期任务</th><th className="px-4 text-right font-medium">完成率</th><th className="px-4 text-right font-medium">专注次数</th><th className="px-4 text-right font-medium">专注时长</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{trendRows.map((row) => <tr key={row.key}><td className="px-4 py-2.5 font-medium">{row.key}</td><td className="px-4 text-right tabular-nums">{row.done}/{row.expected}</td><td className="px-4 text-right tabular-nums">{row.expected ? Math.round(row.done / row.expected * 100) : 0}%</td><td className="px-4 text-right tabular-nums">{row.focusCount}</td><td className="px-4 text-right tabular-nums">{formatMinutes(row.focusMinutes)}</td></tr>)}</tbody></table></div></section>
+    <section className="card p-4"><SectionTitle>每日趋势明细</SectionTitle><div className="max-h-[460px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800"><table className="w-full min-w-[620px] text-sm"><thead className="sticky top-0 bg-slate-50 text-xs text-slate-400 dark:bg-slate-800"><tr><th className="px-4 py-2.5 text-left font-medium">日期</th><th className="px-4 text-right font-medium">每日任务</th><th className="px-4 text-right font-medium">完成率</th><th className="px-4 text-right font-medium">专注次数</th><th className="px-4 text-right font-medium">专注时长</th></tr></thead><tbody className="divide-y divide-slate-100 dark:divide-slate-800">{trendRows.map((row) => <tr key={row.key}><td className="px-4 py-2.5 font-medium">{row.key}</td><td className="px-4 text-right tabular-nums">{row.done}/{row.expected}</td><td className="px-4 text-right tabular-nums">{row.expected ? Math.round(row.done / row.expected * 100) : 0}%</td><td className="px-4 text-right tabular-nums">{row.focusCount}</td><td className="px-4 text-right tabular-nums">{formatMinutes(row.focusMinutes)}</td></tr>)}</tbody></table></div></section>
   </div>;
 }
 

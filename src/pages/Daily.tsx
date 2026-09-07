@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { addDays, fromKey, monthGrid, startOfWeek, toKey, todayKey } from '@/lib/date';
-import { PERIODIC_FREQUENCY_LABELS, periodicFrequencyOf, periodicScheduleText, periodicTaskDueOn } from '@/lib/periodic';
+import { PERIODIC_FREQUENCY_LABELS, periodicFrequencyOf, periodicOccurrenceKeys, periodicScheduleText, periodicTaskCompleted, periodicTaskDueOn } from '@/lib/periodic';
 import { cn } from '@/lib/utils';
 import { useStore, type PeriodicFrequency } from '@/store/useStore';
 import { useDeletable } from '@/hooks/useDeletable';
@@ -55,7 +55,6 @@ export default function Daily() {
   const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [frequency, setFrequency] = useState<PeriodicFrequency>('daily');
   const [startDate, setStartDate] = useState(todayKey());
-  const [dayOfMonth, setDayOfMonth] = useState(new Date().getDate());
   const [mustView, setMustView] = useState<MustView>('day');
   const titleRef = useRef<HTMLInputElement>(null);
   const today = todayKey();
@@ -68,11 +67,11 @@ export default function Daily() {
 
   const orderedTasks = useMemo(() => [...tasks].sort((a, b) => (a.order ?? a.createdAt) - (b.order ?? b.createdAt)), [tasks]);
   const tasksDueOn = (key: string) => orderedTasks.filter((task) => periodicTaskDueOn(task, key));
-  const doneOf = (key: string) => tasksDueOn(key).filter((t) => t.completedDates.includes(key)).length;
+  const doneOf = (key: string) => tasksDueOn(key).filter((task) => periodicTaskCompleted(task, key)).length;
   const statusOf = (key: string): DayStatus => {
     const due = tasksDueOn(key);
     if (due.length === 0) return 'none';
-    const done = due.filter((t) => t.completedDates.includes(key)).length;
+    const done = due.filter((task) => periodicTaskCompleted(task, key)).length;
     if (key > today) return done > 0 ? 'planned' : 'future';
     return done === due.length ? 'done' : done > 0 ? 'partial' : 'miss';
   };
@@ -86,7 +85,7 @@ export default function Daily() {
       const key = toKey(addDays(new Date(), -i));
       const due = tasksDueOn(key);
       if (due.length === 0) continue;
-      const done = due.filter((t) => t.completedDates.includes(key)).length;
+      const done = due.filter((task) => periodicTaskCompleted(task, key)).length;
       if (done === due.length) {
         count += 1;
         continue;
@@ -101,14 +100,15 @@ export default function Daily() {
   /** 本周（周一起）与本月完成率，未来日期不计入分母 */
   const rangeStats = useMemo(() => {
     const calc = (from: Date, days: number) => {
+      const start = toKey(from);
+      const end = [toKey(addDays(from, days - 1)), today].sort()[0];
       let expected = 0;
       let done = 0;
-      for (let i = 0; i < days; i++) {
-        const key = toKey(addDays(from, i));
-        if (key > today) break;
-        const due = tasksDueOn(key);
-        expected += due.length;
-        done += due.filter((t) => t.completedDates.includes(key)).length;
+      if (start > end) return { expected, done, rate: 0 };
+      for (const task of orderedTasks) {
+        const occurrences = periodicOccurrenceKeys(task, start, end);
+        expected += occurrences.length;
+        done += occurrences.filter((key) => periodicTaskCompleted(task, key)).length;
       }
       return { expected, done, rate: expected ? Math.round((done / expected) * 100) : 0 };
     };
@@ -126,14 +126,13 @@ export default function Daily() {
   /* ------------------------------ 交互 ------------------------------ */
 
   const submit = () => {
-    if (!title.trim() || !startDate || (frequency === 'weekly' && !days.length)) return;
+    if (!title.trim() || !startDate || (frequency === 'daily' && !days.length)) return;
     addTask({
       title: title.trim(),
       note: note.trim(),
       frequency,
       startDate,
-      daysOfWeek: frequency === 'weekly' ? [...days].sort() : [],
-      dayOfMonth: frequency === 'monthly' ? dayOfMonth : undefined,
+      daysOfWeek: frequency === 'daily' ? [...days].sort() : [],
     });
     setTitle('');
     setNote('');
@@ -157,11 +156,12 @@ export default function Daily() {
   }, [mustView, viewDate]);
   const mustOccurrences = useMemo(() => orderedTasks.flatMap((task) => {
     const frequencyOfTask = periodicFrequencyOf(task);
+    if (mustView === 'day' && frequencyOfTask !== 'daily') return [];
     if (mustView === 'week' && frequencyOfTask !== 'weekly') return [];
     if (mustView === 'month' && frequencyOfTask !== 'monthly') return [];
-    return mustKeys.filter((key) => periodicTaskDueOn(task, key)).map((key) => ({ task, key }));
+    return periodicOccurrenceKeys(task, mustKeys[0], mustKeys[mustKeys.length - 1]).map((key) => ({ task, key }));
   }), [mustKeys, mustView, orderedTasks]);
-  const viewDone = mustOccurrences.filter(({ task, key }) => task.completedDates.includes(key)).length;
+  const viewDone = mustOccurrences.filter(({ task, key }) => periodicTaskCompleted(task, key)).length;
   const isToday = viewDate === today;
   const mustRangeText = mustView === 'day'
     ? viewDate
@@ -283,15 +283,18 @@ export default function Daily() {
         {mustOccurrences.length === 0 ? <Empty icon={Repeat2} text={mustView === 'week' ? '这一周没有每周必做' : mustView === 'month' ? '这一月没有每月必做' : isToday ? '今天没有周期任务' : '这一天没有安排周期任务'} action={<button className="btn-primary mt-2" onClick={() => titleRef.current?.focus()}><Plus size={15} />新增周期任务</button>} /> : (
           <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
             {mustOccurrences.map(({ task, key }) => {
-              const done = task.completedDates.includes(key);
-              const isFuture = key > today;
-              const isOccurrenceToday = key === today;
+              const done = periodicTaskCompleted(task, key);
+              const rangeStart = mustKeys[0];
+              const rangeEnd = mustKeys[mustKeys.length - 1];
+              const isFuture = rangeStart > today;
+              const isPast = rangeEnd < today;
+              const isCurrent = !isFuture && !isPast;
               return <li key={`${task.id}:${key}`}>
                 <button onClick={() => toggleDate(task.id, key)} className={cn('flex w-full items-center gap-3 rounded-lg border p-3 text-left transition', done && isFuture ? 'border-sky-200 bg-sky-50/70 dark:border-sky-500/30 dark:bg-sky-500/10' : done ? 'border-emerald-200 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10' : 'border-slate-200 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800/60')}>
                   {done ? <CheckCircle2 className={isFuture ? 'text-sky-600' : 'text-emerald-600'} size={20} /> : <Circle className="text-slate-400" size={20} />}
                   <span className={cn('min-w-0 flex-1', done && !isFuture && 'text-slate-400 line-through')}><span className="block truncate text-sm font-medium">{task.title}</span>{task.note && <span className="block truncate text-xs text-slate-400">{task.note}</span>}</span>
-                  {mustView !== 'day' && <span className="chip shrink-0 bg-slate-100 text-[10px] text-slate-500 dark:bg-slate-800">{key.slice(5)}</span>}
-                  {!isOccurrenceToday && <span className={cn('chip shrink-0 text-[10px]', isFuture ? 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800')}>{isFuture ? done ? '已预打卡' : '预打卡' : '补打卡'}</span>}
+                  {mustView !== 'day' && <span className="chip shrink-0 bg-slate-100 text-[10px] text-slate-500 dark:bg-slate-800">{mustView === 'week' ? '周内完成' : '月内完成'}</span>}
+                  {!isCurrent && <span className={cn('chip shrink-0 text-[10px]', isFuture ? 'bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400' : 'bg-slate-100 text-slate-500 dark:bg-slate-800')}>{isFuture ? done ? '已预打卡' : '预打卡' : '补打卡'}</span>}
                 </button>
               </li>;
             })}
@@ -309,15 +312,15 @@ export default function Daily() {
           <input ref={titleRef} className="input" placeholder="例如：阅读 30 分钟" aria-label="任务名称" value={title} onChange={(e) => setTitle(e.target.value)} />
           <input className="input" placeholder="备注（可选）" aria-label="任务备注" value={note} onChange={(e) => setNote(e.target.value)} />
           <input type="date" className="input" aria-label="任务开始日期" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-          <button className="btn-primary" disabled={!title.trim() || !startDate || (frequency === 'weekly' && !days.length)} onClick={submit}><Plus size={15} />添加</button>
+          <button className="btn-primary" disabled={!title.trim() || !startDate || (frequency === 'daily' && !days.length)} onClick={submit}><Plus size={15} />添加</button>
         </div>
-        {frequency === 'daily' && <p className="mt-3 text-xs text-slate-400">从开始日期起，每一天都会生成这项必做任务。</p>}
-        {frequency === 'weekly' && <div className="mt-3 flex flex-wrap items-center gap-2">
+        {frequency === 'daily' && <div className="mt-3 flex flex-wrap items-center gap-2">
           {PRESETS.map((p) => <button key={p.label} className="btn-outline py-1 text-xs" onClick={() => setDays(p.days)}>{p.label}</button>)}
           <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
           {DAYS.map((d, i) => <button key={d} aria-label={`星期${d}`} aria-pressed={days.includes(i)} onClick={() => setDays((v) => v.includes(i) ? v.filter((x) => x !== i) : [...v, i])} className={cn('h-8 w-8 rounded-full text-xs font-medium', days.includes(i) ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500 dark:bg-slate-800')}>{d}</button>)}
         </div>}
-        {frequency === 'monthly' && <label className="mt-3 flex items-center gap-2 text-sm"><span>每月执行日期</span><input type="number" min={1} max={31} className="input w-24" value={dayOfMonth} onChange={(event) => setDayOfMonth(Math.min(31, Math.max(1, Number(event.target.value) || 1)))} /><span className="text-xs text-slate-400">日；月份天数不足时在月末执行</span></label>}
+        {frequency === 'weekly' && <p className="mt-3 text-xs text-slate-400">从开始日期所在周起，每周内完成一次，不限定具体日期。</p>}
+        {frequency === 'monthly' && <p className="mt-3 text-xs text-slate-400">从开始日期所在月起，每月内完成一次，不限定具体日期。</p>}
       </div>
 
       <div className="card p-4">
