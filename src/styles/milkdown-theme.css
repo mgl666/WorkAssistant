@@ -37,4 +37,6 @@
 .milkdown .ProseMirror {
   min-height: 55vh;
   outline: none;
+  /* Crepe 默认左右各留 120px，在备忘录中会让正文过窄。 */
+  padding: 32px clamp(20px, 4vw, 56px);
 }

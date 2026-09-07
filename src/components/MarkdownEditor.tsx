@@ -72,5 +72,5 @@ export default function MarkdownEditor({ value, onChange, placeholder }: Markdow
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={hostRef} className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-8 xl:max-w-6xl xl:px-10" />;
+  return <div ref={hostRef} className="w-full px-1 py-2 sm:px-2" />;
 }
