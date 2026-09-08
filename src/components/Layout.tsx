@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   CalendarDays,
   BarChart3,
+  BriefcaseBusiness,
   FileText,
   LayoutDashboard,
   ListChecks,
@@ -34,6 +35,7 @@ const NAV: NavItem[] = [
   { to: '/goals', label: '长期目标', icon: Target },
   { to: '/notes', label: '备忘录', icon: NotebookPen },
   { to: '/pomodoro', label: '番茄时钟', icon: Timer },
+  { to: '/work-hours', label: '工时统计', icon: BriefcaseBusiness },
   { to: '/statistics', label: '数据统计', icon: BarChart3 },
   { to: '/weekly', label: 'AI 周报', icon: FileText },
   // 「小工具」功能保留但暂时不在主导航露出，避免新用户觉得是个半成品页面

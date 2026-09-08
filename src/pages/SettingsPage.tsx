@@ -107,6 +107,7 @@ export default function SettingsPage() {
       sessions: store.sessions,
       daily_tasks: store.daily_tasks,
       goals: store.goals,
+      work_logs: store.work_logs,
       settings: safeSettings,
     };
     const stamp = new Date().toISOString().slice(0, 10);
@@ -135,6 +136,7 @@ export default function SettingsPage() {
         ['番茄记录', (data.sessions as unknown[] | undefined)?.length ?? 0],
         ['周期任务', (data.daily_tasks as unknown[] | undefined)?.length ?? 0],
         ['长期目标', (data.goals as unknown[] | undefined)?.length ?? 0],
+        ['工时记录', (data.work_logs as unknown[] | undefined)?.length ?? 0],
       ];
       if (!counts.some(([, n]) => n > 0)) {
         toast('文件里没有可导入的数据');

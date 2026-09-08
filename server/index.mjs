@@ -10,7 +10,7 @@ const port = Number(process.env.PORT || 3100);
 const host = process.env.HOST || '127.0.0.1';
 const secureCookie = process.env.COOKIE_SECURE !== 'false';
 const sessionDays = Math.max(1, Number(process.env.SESSION_DAYS || 30));
-const allowedTables = new Set(['events', 'todos', 'lists', 'notes', 'sessions', 'daily_tasks', 'goals']);
+const allowedTables = new Set(['events', 'todos', 'lists', 'notes', 'sessions', 'daily_tasks', 'goals', 'work_logs']);
 const pool = new Pool();
 const app = express();
 app.set('trust proxy', 1);
