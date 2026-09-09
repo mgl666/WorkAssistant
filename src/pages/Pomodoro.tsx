@@ -9,6 +9,7 @@ import {
   SkipForward,
   Timer as TimerIcon,
   Trash2,
+  VolumeX,
 } from 'lucide-react';
 import { cn, prepareTimerSound, requestNotifyPermission } from '@/lib/utils';
 import { stopGlobalTimerAlarm } from '@/components/PomodoroRuntime';
@@ -94,7 +95,10 @@ export default function Pomodoro() {
     updateTimer({ remaining: nextRemaining, completedEndAt: undefined, endAt: Date.now() + Math.max(nextRemaining, 0.5) * 1000 });
   };
 
-  const pause = () => updateTimer({ endAt: null, remaining });
+  const pause = () => {
+    stopAlarm();
+    updateTimer({ endAt: null, remaining });
+  };
 
   const reset = () => {
     stopAlarm();
@@ -195,6 +199,16 @@ export default function Pomodoro() {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            {timer.alarmAt && (
+              <button
+                className="btn-danger border border-rose-200 bg-rose-50 px-5 py-2 font-semibold shadow-sm dark:border-rose-800 dark:bg-rose-950/50"
+                onClick={stopAlarm}
+                aria-label="关闭番茄时钟闹钟"
+              >
+                <VolumeX size={18} />
+                关闭闹钟
+              </button>
+            )}
             {running ? (
               <button className="btn-primary px-6 py-2" onClick={pause}>
                 <Pause size={18} />

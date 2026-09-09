@@ -36,11 +36,12 @@ export default function PomodoroRuntime() {
   if (!alarmAt) return null;
   return (
     <button
-      className="btn-primary fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 shadow-lg"
+      className="btn-danger fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-50 border border-rose-200 bg-white px-4 py-2 font-semibold shadow-lg dark:border-rose-800 dark:bg-slate-900"
       onClick={stopGlobalTimerAlarm}
-      title="停止番茄结束提示音"
+      title="关闭番茄时钟闹钟"
+      aria-label="关闭番茄时钟闹钟"
     >
-      <VolumeX size={17} />停止番茄铃声
+      <VolumeX size={17} />关闭闹钟
     </button>
   );
 }
