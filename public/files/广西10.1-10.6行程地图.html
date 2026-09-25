@@ -108,6 +108,10 @@
   .bt-note{font-size:11.5px;color:#4a6a8a;margin:7px 0 0;line-height:1.6;}
   .bt-note b{color:#185fa5;}
 
+  /* 三列"最佳时段"表：前两列禁止自动换行——中文逐字断行会把"三门海游船"排成竖排单字 */
+  table.slots th:nth-child(1),table.slots td:nth-child(1),
+  table.slots th:nth-child(2),table.slots td:nth-child(2){white-space:nowrap;}
+
   /* ---------- 左右分栏：可拖动的分隔条 ---------- */
   .gutter{
     flex:0 0 9px;width:9px;height:100%;background:var(--card);
@@ -126,12 +130,101 @@
   body.gx-resizing{cursor:col-resize!important;}
   body.gx-resizing *{user-select:none!important;-webkit-user-select:none!important;}
 
+  /* ==================== 手机 / 平板适配 ==================== */
   @media (max-width:880px){
+    html,body{height:auto;}
+    body{
+      -webkit-text-size-adjust:100%;text-size-adjust:100%;
+      -webkit-tap-highlight-color:transparent;
+    }
     .app{display:block;height:auto;}
-    .map-wrap{height:58vh;min-height:330px;}
-    .panel{width:100%;flex:none;height:auto;border-left:none;border-top:1px solid var(--line);}
-    .map-legend{left:10px;bottom:10px;font-size:11px;}
+    /* 上地图、下行程；高度用 min() 封顶，小屏不会把行程顶出首屏 */
+    .map-wrap{
+      display:flex;flex-direction:column;
+      height:min(52vh,440px);min-height:320px;
+    }
+    #map{height:auto;flex:1 1 auto;min-height:0;}
+    .panel{
+      width:100%!important;flex:none!important;height:auto;
+      border-left:none;border-top:1px solid var(--line);
+      padding:16px 14px calc(36px + env(safe-area-inset-bottom));
+    }
     .gutter{display:none;}
+
+    /* 手机上「单指上下滑＝滚页面」，横向拖动才平移地图，双指仍可缩放 */
+    #map{touch-action:pan-y;}
+
+    /* 图例从"浮在地图上"改成"地图下方的工具条"：
+       不再盖住腾讯地图左下角的比例尺，长解释收起，按钮做到手指点得中 */
+    .map-legend{
+      position:static;left:auto;right:auto;bottom:auto;order:2;
+      margin:0;border-radius:0;border-left:none;border-right:none;border-bottom:none;
+      box-shadow:none;max-width:none;
+      display:flex;align-items:center;flex-wrap:wrap;gap:4px 6px;
+      font-size:11px;line-height:1.5;padding:8px 12px;
+    }
+    .map-legend .lg-long{display:none;}
+    .map-legend button{
+      margin-left:auto;font-size:12.5px;padding:7px 12px;border-radius:8px;
+      min-height:36px;line-height:1.2;
+    }
+
+    /* 概览三格：小屏收紧，别被挤换行 */
+    .stat{gap:6px;margin-bottom:14px;}
+    .stat div{padding:9px 4px;}
+    .stat b{font-size:16px;}
+    .stat span{font-size:10.5px;}
+
+    /* 日期卡片：头部允许换行，正文与时间列略收 */
+    .day-hd{flex-wrap:wrap;gap:6px 10px;padding:10px 12px;}
+    .day-hd .tt{font-size:13px;}
+    .day-bd{padding:10px 12px 12px;}
+    .row .tm{flex:0 0 46px;font-size:11.5px;}
+    .row .tx{font-size:13px;}
+    .legrow{font-size:12px;}
+    .box{padding:12px 13px;font-size:12.5px;}
+
+    /* 表格：小屏缩字号 + 收紧内边距，金额列不换行 */
+    table.money{font-size:11.5px;}
+    table.money th,table.money td{padding:5px 6px;}
+    table.money td:last-child{white-space:nowrap;}
+  }
+  /* 小屏手机再收一档 */
+  @media (max-width:430px){
+    .map-wrap{height:min(48vh,400px);min-height:300px;}
+    .panel{padding:14px 12px calc(28px + env(safe-area-inset-bottom));}
+    .day-hd .dr{font-size:11px;}
+    table.money{font-size:11px;}
+    table.money th,table.money td{padding:4px 5px;}
+  }
+  /* 支持 svh 的浏览器用它，地址栏收放时地图不会跳高 */
+  @supports (height:100svh){
+    @media (max-width:880px){ .map-wrap{height:min(52svh,440px);} }
+    @media (max-width:430px){ .map-wrap{height:min(48svh,400px);} }
+  }
+  /* 手机横屏：屏幕太矮，"上地图下行程"会把行程全挤出屏幕 → 恢复左右并排 */
+  @media (max-width:880px) and (orientation:landscape) and (max-height:520px){
+    html,body{height:100%;}
+    .app{display:flex;height:100vh;height:100svh;}
+    .map-wrap{height:auto;min-height:0;flex:1 1 auto;min-width:0;}
+    .panel{
+      width:min(46vw,360px)!important;flex:0 0 auto!important;
+      height:100%;overflow-y:auto;
+      border-left:1px solid var(--line);border-top:none;
+      padding:12px 12px calc(20px + env(safe-area-inset-bottom));
+    }
+  }
+  /* 小屏上的三列"最佳时段"表：列被压窄会逐字断行（"三 门 海 游 船"），
+     改成一行一张小卡片，不用横向滚动也读得清 */
+  @media (max-width:430px){
+    table.slots{display:block;border:1px solid #c6dcf3;border-radius:10px;background:#fff;padding:2px 10px;}
+    table.slots tr{display:block;border-bottom:1px dashed #dbe9f7;padding:7px 0;}
+    table.slots tr:last-child{border-bottom:none;}
+    table.slots th{display:none;}
+    table.slots td{display:block;border:none!important;padding:1px 0;text-align:left!important;}
+    table.slots td:nth-child(1){font-weight:600;color:#123c66;font-size:12.5px;}
+    table.slots td:nth-child(2){color:var(--teal);font-size:12px;font-weight:600;}
+    table.slots td:nth-child(3){color:var(--ink2);font-size:12px;line-height:1.55;}
   }
   @media print{
     /* 打印 / 转 PDF 时隐藏拖动条，并忽略拖动留下的宽度，恢复整幅版式 */
@@ -153,7 +246,7 @@
 
   <div class="map-wrap">
     <div id="map"></div>
-    <div class="map-legend"><i></i> 自驾连线（示意） · <span class="bdg">380&nbsp;km<br>4.5 小时</span> 线上标签＝该段里程 / 车程 · 底图：腾讯地图 · 10/1 与 10/6 的高铁段在图外
+    <div class="map-legend"><i></i> 自驾连线（示意） · <span class="bdg">380&nbsp;km<br>4.5 小时</span><span class="lg-long"> 线上标签＝该段里程 / 车程 · 底图：腾讯地图 · 10/1 与 10/6 的高铁段在图外</span>
       <button id="legToggle" type="button">隐藏里程</button>
     </div>
   </div>
@@ -183,7 +276,7 @@
 
     <div class="box b-info" style="margin-top:0;">
       <h3>每个景点的"最佳时段"——行程就是照这张表排的</h3>
-      <table class="money" style="border-color:#c6dcf3;">
+      <table class="money slots" style="border-color:#c6dcf3;">
         <tr><th>点位</th><th style="text-align:left;">最佳时段</th><th style="text-align:left;">为什么</th></tr>
         <tr><td style="text-align:left;">三门海游船</td><td style="text-align:left;">08:30 首班</td><td style="text-align:left;">旅行团 10 点后才到；晴天水才透亮</td></tr>
         <tr><td style="text-align:left;">浩坤湖晨雾</td><td style="text-align:left;">06:00–08:00</td><td style="text-align:left;">湖面平流雾只有清晨有</td></tr>
@@ -595,10 +688,19 @@
     }
   }
 
+  /* 手机上是"上地图、下行程"的顺排：点行程卡片时要把地图滑回视野，
+     否则 setCenter 的结果都在屏幕外，用户看不到任何反馈 */
+  function revealMap() {
+    if (window.innerWidth > 880) { return; }
+    var mw = document.querySelector('.map-wrap');
+    if (mw && mw.scrollIntoView) { mw.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  }
+
   function focusStop(idx) {
     for (var i = 0; i < STOPS.length; i++) {
       if (STOPS[i].i === idx && map) {
         try { map.setCenter(new TMap.LatLng(STOPS[i].lat, STOPS[i].lng)); map.setZoom(11); } catch (e) { }
+        revealMap();
         return;
       }
     }

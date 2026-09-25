@@ -37,6 +37,7 @@ server {
     gzip_min_length 1024;
 
     add_header X-Content-Type-Options nosniff always;
-    add_header X-Frame-Options DENY always;
+    # 「其他」栏目会同源内嵌 dist/files 中的 HTML 页面。
+    add_header X-Frame-Options SAMEORIGIN always;
     add_header Referrer-Policy strict-origin-when-cross-origin always;
 }

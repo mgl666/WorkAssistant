@@ -7,8 +7,11 @@
     "node": ">=20"
   },
   "scripts": {
+    "predev": "node scripts/generate-file-index.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/generate-file-index.mjs",
     "build": "tsc --noEmit && vite build",
+    "files:index": "node scripts/generate-file-index.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

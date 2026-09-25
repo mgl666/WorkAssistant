@@ -175,6 +175,16 @@ bash deploy/update.sh
 
 更新脚本只会拉取已经构建好的 `dist`、安装 API 生产依赖并重启 API，不会在 VPS 构建前端，也不会删除 PostgreSQL 数据。
 
+## 「其他」栏目的 HTML 网页
+
+将任意 `.html` 或 `.htm` 文件放入 `public/files`（可以使用子目录），然后正常执行 `npm run build`。构建前会自动生成 `public/files/index.json`：
+
+- 只有一个网页时，「其他」会直接展示它。
+- 有多个网页时，顶部会出现切换菜单。
+- 页面名称优先使用 HTML 里的 `<title>`，没有时使用文件名。
+
+Nginx 需使用 `X-Frame-Options SAMEORIGIN`，才能在「其他」中嵌入同站点的 HTML 页面；仓库中的配置示例已包含该设置。
+
 ## 数据库备份
 
 ```bash
