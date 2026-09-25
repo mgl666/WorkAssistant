@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ExternalLink, FileCode2, FolderOpen } from 'lucide-react';
 
 interface HtmlFile {
@@ -14,7 +14,6 @@ function fileUrl(filePath: string) {
 
 export default function Other() {
   const [files, setFiles] = useState<HtmlFile[]>([]);
-  const [selectedPath, setSelectedPath] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -29,7 +28,6 @@ export default function Other() {
         if (cancelled) return;
         const validItems = items.filter((item) => item.path && item.title);
         setFiles(validItems);
-        setSelectedPath((current) => current || validItems[0]?.path || '');
       })
       .catch(() => {
         if (!cancelled) setError('无法读取网页目录，请重新构建项目。');
@@ -40,59 +38,44 @@ export default function Other() {
     return () => { cancelled = true; };
   }, []);
 
-  const selectedFile = useMemo(
-    () => files.find((file) => file.path === selectedPath) ?? files[0],
-    [files, selectedPath],
-  );
-  const selectedUrl = selectedFile ? fileUrl(selectedFile.path) : '';
-
   return (
-    <section className="flex h-[calc(100dvh-5rem)] min-h-[34rem] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 md:h-[calc(100dvh-6.5rem)]">
-      <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-3 py-2.5 dark:border-slate-800 sm:px-4">
+    <section className="space-y-4">
+      <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
           <FolderOpen size={19} />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold sm:text-base">{selectedFile?.title ?? '其他网页'}</h2>
-          <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-            {selectedFile?.path ?? '将 HTML 文件放入 public/files'}
-          </p>
+          <h2 className="text-base font-semibold">网页链接</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400">点击后在新窗口打开</p>
         </div>
-        {files.length > 1 && (
-          <select
-            className="input w-auto max-w-44 py-1.5 sm:max-w-64"
-            aria-label="选择网页"
-            value={selectedFile?.path ?? ''}
-            onChange={(event) => setSelectedPath(event.target.value)}
-          >
-            {files.map((file) => <option key={file.path} value={file.path}>{file.title}</option>)}
-          </select>
-        )}
-        {selectedUrl && (
-          <a
-            className="btn-outline shrink-0 px-2.5"
-            href={selectedUrl}
-            target="_blank"
-            rel="noreferrer"
-            title="在新窗口打开"
-          >
-            <ExternalLink size={16} />
-            <span className="hidden sm:inline">新窗口打开</span>
-          </a>
-        )}
       </div>
 
-      {selectedFile ? (
-        <iframe
-          key={selectedFile.path}
-          className="min-h-0 w-full flex-1 border-0 bg-slate-50"
-          src={selectedUrl}
-          title={selectedFile.title}
-        />
+      {files.length > 0 ? (
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {files.map((file) => (
+            <li key={file.path}>
+              <a
+                className="card flex min-h-24 items-center gap-3 p-4 transition hover:border-indigo-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:border-indigo-700"
+                href={fileUrl(file.path)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-300">
+                  <FileCode2 size={20} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium text-slate-800 dark:text-slate-100">{file.title}</span>
+                  <span className="mt-1 block truncate text-xs text-slate-500 dark:text-slate-400">{file.path}</span>
+                </span>
+                <ExternalLink className="shrink-0 text-slate-400" size={17} />
+              </a>
+            </li>
+          ))}
+        </ul>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-slate-500 dark:text-slate-400">
+        <div className="card flex min-h-52 flex-col items-center justify-center gap-3 px-6 text-center text-slate-500 dark:text-slate-400">
           <FileCode2 size={36} strokeWidth={1.5} />
-          <p className="text-sm">{loading ? '正在读取网页…' : error || '还没有可展示的 HTML 文件。'}</p>
+          <p className="text-sm">{loading ? '正在读取网页链接…' : error || '还没有可用的网页链接。'}</p>
         </div>
       )}
     </section>

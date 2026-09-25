@@ -1,6 +1,6 @@
 ---
 name: add-workassistant-webpage
-description: Add, replace, remove, validate, build, and optionally publish standalone HTML pages displayed in WorkAssistant's 「其他」 section. Use for webpage files under public/files or when the user asks to add another webpage to WorkAssistant.
+description: Add, replace, remove, validate, build, and optionally publish standalone HTML pages linked from WorkAssistant's 「其他」 section. Use for webpage files under public/files or when the user asks to add another webpage to WorkAssistant.
 ---
 
 # Add a WorkAssistant webpage
@@ -45,4 +45,4 @@ cd /var/www/work-assistant
 bash deploy/update.sh
 ```
 
-The deployed Nginx configuration must use `X-Frame-Options SAMEORIGIN`; `DENY` blocks pages embedded by the 「其他」 section.
+「其他」只展示链接列表，不在 WorkAssistant 内嵌网页。
