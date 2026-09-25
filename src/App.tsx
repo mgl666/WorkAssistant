@@ -15,6 +15,7 @@ import Daily from '@/pages/Daily';
 import LongTermGoals from '@/pages/LongTermGoals';
 import Statistics from '@/pages/Statistics';
 import WorkHours from '@/pages/WorkHours';
+import Other from '@/pages/Other';
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
             <Route path="/notes" element={<Notes />} />
             <Route path="/weekly" element={<Weekly />} />
             <Route path="/tools" element={<Tools />} />
+            <Route path="/other" element={<Other />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>

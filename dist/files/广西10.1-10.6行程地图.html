@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>广西 10.1–10.6 自驾行程 · 点位与车程地图</title>
+<style>
+  :root{
+    --ink:#16211f; --ink2:#4a5a57; --ink3:#7d8c89;
+    --line:#dfe6e4; --bg:#f5f7f6; --card:#fff;
+    --teal:#0f6e56; --teal-l:#e1f5ee;
+    --blue:#185fa5; --blue-l:#e6f1fb;
+    --amber:#854f0b; --amber-l:#faeeda;
+    --red:#a32d2d; --red-l:#fcebeb;
+    --green:#3b6d11; --green-l:#eaf3de;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:14px;line-height:1.7;-webkit-font-smoothing:antialiased;
+  }
+  .app{display:flex;height:100%;align-items:stretch;}
+
+  .map-wrap{position:relative;flex:1 1 auto;min-width:0;height:100%;}
+  #map{width:100%;height:100%;}
+  .map-legend{
+    position:absolute;left:16px;bottom:16px;background:rgba(255,255,255,.95);
+    border:1px solid var(--line);border-radius:10px;padding:9px 13px;font-size:12px;color:var(--ink2);
+    box-shadow:0 2px 10px rgba(22,33,31,.08);max-width:calc(100% - 32px);
+  }
+  .map-legend i{display:inline-block;width:22px;height:3px;background:var(--teal);border-radius:2px;vertical-align:middle;margin-right:6px;}
+  .map-legend .bdg{display:inline-block;border:1px solid var(--teal);border-radius:4px;padding:0 3px;
+    font-size:8.5px;line-height:1.3;color:var(--teal);background:#fff;vertical-align:middle;margin-right:6px;}
+  .map-legend button{
+    margin-left:8px;font:inherit;font-size:11.5px;color:var(--blue);background:#fff;
+    border:1px solid #c6dcf3;border-radius:6px;padding:1px 8px;cursor:pointer;vertical-align:middle;
+  }
+  .map-legend button:hover{background:var(--blue-l);}
+
+  .panel{
+    flex:0 0 430px;width:430px;height:100%;overflow-y:auto;
+    background:var(--card);border-left:1px solid var(--line);padding:20px 20px 60px;
+  }
+  .panel h2{font-size:16px;margin:0 0 4px;font-weight:600;}
+  .panel .lead{font-size:12.5px;color:var(--ink3);margin:0 0 14px;}
+
+  .stat{display:flex;gap:7px;margin-bottom:16px;}
+  .stat div{flex:1;background:var(--teal-l);border-radius:10px;padding:8px 6px;text-align:center;}
+  .stat b{display:block;font-size:15px;color:#085041;font-weight:600;line-height:1.4;}
+  .stat span{font-size:11px;color:var(--teal);}
+
+  .day{border:1px solid var(--line);border-radius:14px;margin-bottom:12px;overflow:hidden;}
+  .day-hd{display:flex;align-items:center;gap:10px;padding:10px 13px;background:#fafcfb;border-bottom:1px solid var(--line);cursor:pointer;}
+  .day-hd .dt{font-size:12.5px;font-weight:600;color:#fff;background:var(--teal);border-radius:7px;padding:2px 9px;white-space:nowrap;}
+  .day-hd .tt{font-size:13.5px;font-weight:600;flex:1;}
+  .day-hd .dr{font-size:11.5px;color:var(--ink3);white-space:nowrap;}
+  .day-bd{padding:10px 13px 12px;}
+  .row{display:flex;gap:9px;margin-bottom:6px;}
+  .row .tm{flex:0 0 52px;font-size:12px;color:var(--ink3);padding-top:2px;}
+  .row .tx{flex:1;font-size:13px;}
+  .row .tx b{font-weight:600;}
+  .stay{
+    display:flex;gap:8px;margin-top:8px;padding:8px 10px;border-radius:9px;
+    background:var(--blue-l);border:1px solid #c6dcf3;font-size:12.5px;color:#123c66;
+  }
+  .stay .k{font-weight:600;color:var(--blue);white-space:nowrap;}
+  .legrow{
+    display:flex;gap:8px;align-items:center;margin:8px 0 2px;padding:7px 10px;
+    background:var(--teal-l);border-radius:9px;font-size:12.5px;color:#085041;
+  }
+  .legrow b{font-weight:600;}
+  .legrow a{margin-left:auto;font-size:11.5px;color:var(--blue);text-decoration:none;
+    border:1px solid #c6dcf3;background:#fff;border-radius:6px;padding:0 7px;white-space:nowrap;}
+
+  .alert{border-radius:11px;padding:11px 13px;margin:9px 0;font-size:12.5px;border:1px solid;}
+  .a-red{background:var(--red-l);border-color:#f5c6c6;color:#5c1c1c;}
+  .a-red b{color:var(--red);}
+  .a-amber{background:var(--amber-l);border-color:#f0dcb4;color:#4f300a;}
+  .a-amber b{color:var(--amber);}
+
+  .box{border-radius:12px;padding:13px 15px;margin-top:16px;font-size:13px;}
+  .box h3{font-size:13.5px;margin:0 0 7px;font-weight:600;}
+  .box ul{margin:0;padding-left:17px;}
+  .box li{margin-bottom:5px;}
+  .b-tip{background:var(--amber-l);border:1px solid #f0dcb4;color:#4f300a;}
+  .b-tip h3{color:var(--amber);}
+  .b-info{background:var(--blue-l);border:1px solid #c6dcf3;color:#123c66;}
+  .b-info h3{color:var(--blue);}
+  .b-good{background:var(--green-l);border:1px solid #d3e3b6;color:#26450c;}
+  .b-good h3{color:var(--green);}
+  table.money{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;}
+  table.money th,table.money td{border:1px solid #e6d3ac;padding:5px 7px;text-align:left;}
+  table.money th{background:#f7ead0;font-weight:600;}
+  table.money td:last-child{text-align:right;white-space:nowrap;}
+
+  table.money.bud{margin-top:4px;}
+  table.money.bud th,table.money.bud td{border-color:#cfe0f2;padding:5px 8px;}
+  table.money.bud th{background:#e6f1fb;color:#123c66;}
+  table.money.bud td:last-child{text-align:right;}
+  table.money.bud .amt{font-variant-numeric:tabular-nums;}
+  table.money.bud tr.grp td{background:#eef6fd;font-weight:700;color:#185fa5;}
+  table.money.bud tr.grp td:last-child{text-align:right;}
+  table.money.bud tr.sub td{background:#e6f1fb;font-weight:600;color:#123c66;}
+  table.money.bud tr.total td{background:#d3e6f8;font-weight:700;font-size:13px;color:#0d3f74;}
+  table.money.bud tr.opt td{color:#5b7290;}
+  .bt-note{font-size:11.5px;color:#4a6a8a;margin:7px 0 0;line-height:1.6;}
+  .bt-note b{color:#185fa5;}
+
+  /* ---------- 左右分栏：可拖动的分隔条 ---------- */
+  .gutter{
+    flex:0 0 9px;width:9px;height:100%;background:var(--card);
+    display:flex;align-items:center;justify-content:center;
+    cursor:col-resize;touch-action:none;
+    user-select:none;-webkit-user-select:none;
+  }
+  .gutter::before{
+    content:'';width:3px;height:40px;border-radius:3px;background:#c9d4d1;
+    transition:background .15s ease,height .15s ease;
+  }
+  .gutter:hover,.gutter.active{background:#f1f8f5;}
+  .gutter:hover::before,.gutter.active::before{background:var(--teal);height:60px;}
+  .gutter:focus{outline:none;}
+  .gutter:focus-visible::before{background:var(--teal);height:60px;box-shadow:0 0 0 3px var(--teal-l);}
+  body.gx-resizing{cursor:col-resize!important;}
+  body.gx-resizing *{user-select:none!important;-webkit-user-select:none!important;}
+
+  @media (max-width:880px){
+    .app{display:block;height:auto;}
+    .map-wrap{height:58vh;min-height:330px;}
+    .panel{width:100%;flex:none;height:auto;border-left:none;border-top:1px solid var(--line);}
+    .map-legend{left:10px;bottom:10px;font-size:11px;}
+    .gutter{display:none;}
+  }
+  @media print{
+    /* 打印 / 转 PDF 时隐藏拖动条，并忽略拖动留下的宽度，恢复整幅版式 */
+    .gutter{display:none;}
+    .app{display:block!important;height:auto!important;}
+    .panel{width:auto!important;height:auto!important;flex:none!important;
+      border-left:none!important;border-top:1px solid var(--line)!important;}
+  }
+</style>
+<script type="text/javascript">
+  window._TMapSecurityConfig = {
+    serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
+  };
+</script>
+<script src="https://map.qq.com/api/gljs?v=1.exp&libraries=service"></script>
+</head>
+<body>
+<div class="app">
+
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="map-legend"><i></i> 自驾连线（示意） · <span class="bdg">380&nbsp;km<br>4.5 小时</span> 线上标签＝该段里程 / 车程 · 底图：腾讯地图 · 10/1 与 10/6 的高铁段在图外
+      <button id="legToggle" type="button">隐藏里程</button>
+    </div>
+  </div>
+
+  <div class="gutter" id="gutter" role="separator" aria-orientation="vertical"
+       aria-label="拖动调整右侧面板宽度" tabindex="0"
+       title="拖动调整宽度 · 双击还原默认 · 方向键微调"></div>
+
+  <aside class="panel">
+    <h2>10.1 – 10.6 逐日行程</h2>
+    <p class="lead">里程与车程为参考值；点位坐标为大致位置，导航请用景区全名搜索。</p>
+
+    <div class="stat">
+      <div><b>6</b><span>天 5 晚</span></div>
+      <div><b>1005</b><span>km 自驾</span></div>
+      <div><b>约 15</b><span>小时驾驶</span></div>
+    </div>
+
+    <div class="alert a-red">
+      <b>三个必须提前处理的点</b>
+      <ul style="margin:6px 0 0;padding-left:17px;">
+        <li><b>广州南换乘只有 28 分钟。</b>G6588 21:06 到广州南，D4784 21:34 开。同站免出站换乘，跟着「中转换乘」指示走；国庆人多，下车就往换乘通道走，<b>别去取票窗口、别出站</b>。若前序晚点赶不上，可退改乘后续车次（D4786 23:13 开、D4872 23:27 开）。</li>
+        <li><b>10/2 别拖到下午才出发。</b>00:58 才到南宁东、约 01:30 才能睡下，上午本来就玩不动，硬排景点只会让出发更晚。睡到自然醒 → 10:00 取车 → <b>12:00 出发</b>（最晚 16:00），16:30 到三门海。</li>
+        <li><b>10/6 高铁票现在就买；德天瀑布需提前 2–5 天线上预约</b>（分时段入园），现场不保证有票。</li>
+      </ul>
+    </div>
+
+    <div class="box b-info" style="margin-top:0;">
+      <h3>每个景点的"最佳时段"——行程就是照这张表排的</h3>
+      <table class="money" style="border-color:#c6dcf3;">
+        <tr><th>点位</th><th style="text-align:left;">最佳时段</th><th style="text-align:left;">为什么</th></tr>
+        <tr><td style="text-align:left;">三门海游船</td><td style="text-align:left;">08:30 首班</td><td style="text-align:left;">旅行团 10 点后才到；晴天水才透亮</td></tr>
+        <tr><td style="text-align:left;">浩坤湖晨雾</td><td style="text-align:left;">06:00–08:00</td><td style="text-align:left;">湖面平流雾只有清晨有</td></tr>
+        <tr><td style="text-align:left;">浩坤湖日落</td><td style="text-align:left;">17:30–18:30</td><td style="text-align:left;">弄外屯山顶朝西，日落机位</td></tr>
+        <tr><td style="text-align:left;">鹅泉</td><td style="text-align:left;">07:00–09:30</td><td style="text-align:left;">7:00 开门；清晨水面如镜、有薄雾，10 点后大巴团</td></tr>
+        <tr><td style="text-align:left;">德天瀑布</td><td style="text-align:left;">08:00–11:00</td><td style="text-align:left;">中国侧朝东北看，上午顺光、下午逆光</td></tr>
+        <tr><td style="text-align:left;">明仕田园</td><td style="text-align:left;">16:30–18:30</td><td style="text-align:left;">傍晚泛舟、日落光线</td></tr>
+      </table>
+      <p style="margin:7px 0 0;font-size:12px;">10/4 唯一的"抢时段"就是鹅泉——清晨 7–9 点水面无风如镜、有薄雾，10 点后大巴团就到。所以这天仍然 <b>06:40 前出发</b>，浩坤湖晨雾只能看 30–40 分钟。好在下午会空出约 2 小时，正好把 <b>明仕田园日落</b>补进来。</p>
+    </div>
+
+    <div id="days"></div>
+
+    <div class="box b-tip">
+      <h3>10/4 已经松下来了，这里还有一种更慢的走法</h3>
+      <p style="margin:0 0 6px;">10/4 只剩鹅泉一个收费景点，下午 14:30 前后就能到硕龙镇。如果还想更从容：</p>
+      <ul>
+        <li><b>方案一 · 放弃鹅泉的晨光：</b>07:30 才从浩坤湖出发 → 10:30 到鹅泉。代价是赶不上无风如镜的水面，10 点后大巴团陆续进园，机位和光线都打折。</li>
+        <li><b>方案二 · 保住浩坤湖的晨雾与日落：</b>10/3 三门海游船后立即出发，13:00 到浩坤湖，只坐画舫 + 登弄外屯看日落，不赶；<b>但当晚就开到靖西住</b>（150 km、2.5 小时，约 21:00 到）。10/4 睡到 07:00 再玩鹅泉，正好是全行程最好的时段。代价是浩坤湖的晨雾看不到、当天要多开一段夜路。</li>
+      </ul>
+    </div>
+
+    <div class="box b-info">
+      <h3>花钱清单 · 两人合计</h3>
+      <p class="bt-note" style="margin:2px 0 8px;">下表全部为 <b>两人合计</b>。车、房按整笔直接列出；门票、交通、吃喝按「单价 × 2 人」计。自驾里程按全程 <b>1005 km</b> 计，价格取 2026 国庆期间参考区间。</p>
+
+      <table class="money bud">
+        <tr class="grp"><td>A · 大交通</td><td>2 人</td></tr>
+        <tr><td>深圳北 → 广州南 G6588 二等座 74.5 × 2</td><td class="amt">149 元</td></tr>
+        <tr><td>广州南 → 南宁东 D4784 二等座 250 × 2</td><td class="amt">500 元</td></tr>
+        <tr><td>南宁东 → 深圳北（10/6 返程）324.5 × 2</td><td class="amt">649 元</td></tr>
+        <tr class="sub"><td>小计</td><td class="amt">1298 元</td></tr>
+      </table>
+
+      <table class="money bud">
+        <tr class="grp"><td>B · 租车与用车（整车计价）</td><td>2 人</td></tr>
+        <tr><td>租车 4 天（10/2 取 → 10/5 还）<br><span style="color:#5b7290;font-size:11.5px;">按预算 <b>1500 元</b>锁定，约 375 元/天（SUV / 1.5T 以上）</span></td><td class="amt">1500 元</td></tr>
+        <tr><td>尊享 / 不计免赔服务<br><span style="color:#5b7290;font-size:11.5px;">约 60 元/天 × 4 天，山路建议买</span></td><td class="amt">240 元</td></tr>
+        <tr><td>油费 1005 km<br><span style="color:#5b7290;font-size:11.5px;">约 80 L × 7.4 元/L（92#）</span></td><td class="amt">550–650 元</td></tr>
+        <tr><td>高速过路费<br><span style="color:#5b7290;font-size:11.5px;">国庆 10/1–10/7 免费</span></td><td class="amt">0 元</td></tr>
+        <tr><td>停车费<br><span style="color:#5b7290;font-size:11.5px;">景区约 10–20 元/次 × 6–8 次</span></td><td class="amt">60–120 元</td></tr>
+        <tr class="sub"><td>小计</td><td class="amt">2350–2510 元</td></tr>
+      </table>
+
+      <table class="money bud">
+        <tr class="grp"><td>C · 住宿（5 晚 · 整间计价，2 人住）</td><td>2 人</td></tr>
+        <tr><td>10/1 南宁东站附近 · 连锁酒店</td><td class="amt">250–300 元</td></tr>
+        <tr><td>10/2 三门海 · 山脚临水民宿</td><td class="amt">250–300 元</td></tr>
+        <tr><td>10/3 浩坤湖 · 湖区民宿</td><td class="amt">250–300 元</td></tr>
+        <tr><td>10/4 硕龙镇 · 镇上客栈</td><td class="amt">250–300 元</td></tr>
+        <tr><td>10/5 南宁东站附近 · 连锁酒店</td><td class="amt">250–300 元</td></tr>
+        <tr class="sub"><td>小计（250–300 元 × 5 晚）</td><td class="amt">1250–1500 元</td></tr>
+      </table>
+
+      <table class="money bud">
+        <tr class="grp"><td>D · 门票与景区项目</td><td>2 人</td></tr>
+        <tr><td>三门海游船（含讲解）98 × 2</td><td class="amt">196 元</td></tr>
+        <tr><td>浩坤湖大门票（线上价）（48–58）× 2</td><td class="amt">96–116 元</td></tr>
+        <tr><td>浩坤湖画舫游船 40 分钟 50 × 2</td><td class="amt">100 元</td></tr>
+        <tr><td>靖西鹅泉 46 × 2</td><td class="amt">92 元</td></tr>
+        <tr><td>德天瀑布（门票 + 观光车，<b>观光车必购</b>）115 × 2</td><td class="amt">230 元</td></tr>
+        <tr class="sub"><td>小计（必花）</td><td class="amt">714–734 元</td></tr>
+        <tr class="opt"><td>弄外屯山顶观景台（也可徒步免费上）30 × 2</td><td class="amt">60 元</td></tr>
+        <tr class="opt"><td>德天界河竹筏（自费，一筏跨两国）48 × 2</td><td class="amt">96 元</td></tr>
+        <tr class="opt"><td>含可选项小计</td><td class="amt">870–890 元</td></tr>
+      </table>
+
+      <table class="money bud">
+        <tr class="grp"><td>E · 吃喝</td><td>2 人</td></tr>
+        <tr><td>早餐 15–25 元 × 5 天 × 2 人<br><span style="color:#5b7290;font-size:11.5px;">老友粉／米粉／酒店含早</span></td><td class="amt">150–250 元</td></tr>
+        <tr><td>午餐 40–60 元 × 5 天 × 2 人<br><span style="color:#5b7290;font-size:11.5px;">景区门口或镇上简餐</span></td><td class="amt">400–600 元</td></tr>
+        <tr><td>晚餐 60–100 元 × 4 天 × 2 人<br><span style="color:#5b7290;font-size:11.5px;">南宁柠檬鸭／烤鱼，镇上农家菜</span></td><td class="amt">480–800 元</td></tr>
+        <tr><td>10/1 抵达夜宵（30–50）× 2</td><td class="amt">60–100 元</td></tr>
+        <tr><td>零食、饮水、咖啡 15–25 元 × 6 天 × 2 人</td><td class="amt">180–300 元</td></tr>
+        <tr class="sub"><td>小计</td><td class="amt">1270–2050 元</td></tr>
+      </table>
+
+      <table class="money bud">
+        <tr class="grp"><td>F · 杂项</td><td>2 人</td></tr>
+        <tr><td>防晒、驱蚊、雨衣（40–60）× 2</td><td class="amt">80–120 元</td></tr>
+        <tr><td>常用药与应急（20–30）× 2</td><td class="amt">40–60 元</td></tr>
+        <tr><td>机动预留（30–60）× 2</td><td class="amt">60–120 元</td></tr>
+        <tr class="sub"><td>小计</td><td class="amt">180–300 元</td></tr>
+      </table>
+
+      <table class="money bud" style="margin-top:10px;">
+        <tr class="total"><td>两人合计（A–F，含往返高铁）</td><td class="amt">7060–8550 元</td></tr>
+        <tr class="total"><td>折合每人</td><td class="amt">约 3530–4280 元</td></tr>
+      </table>
+
+      <p class="bt-note">按「<b>SUV / 1.5T 以上车型</b> + <b>住宿每间 250–300 元</b> + 正常下馆子」估算，<b>两人中位约 7800 元、折合每人约 3900 元</b>。国庆是租车与住宿双旺季：南宁门店的 SUV 通常 9 月中旬就被订空，三门海、浩坤湖的临湖民宿也一房难求，<b>两样都建议尽早锁定</b>。若租车改回经济型轿车（220–320 元/天 × 4 天＝880–1280 元），两人可省 <b>220–620 元</b>。</p>
+    </div>
+
+    <div class="box b-good">
+      <h3>租车提醒</h3>
+      <ul>
+        <li><b>10/2 凌晨 00:58 到南宁东，租车行已关门</b>——凌晨那程直接打网约车进城。租车约 <b>10/2 上午 10:00</b> 在南宁东站站区取（这里车行最密集），可提前一晚用微信跟门店约好交接时间。</li>
+        <li>取车时确认 <b>能否异地/异地门店还车</b>，以及国庆期间的里程限制；广西山区多，建议选 1.5T 以上或 SUV，山路超车才有余量。</li>
+        <li>10/5 晚推荐住 <b>南宁东站附近</b>，10/5 傍晚就把车还掉，10/6 只带行李进站最省事。</li>
+        <li>国庆高速免费（10/1 00:00–10/7 24:00，7 座及以下），这趟约 1005 km 过路费为 0，但 <b>10/5 下午是返程高峰</b>，德天→南宁留足 4.5 小时。</li>
+      </ul>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var STOPS = [
+    { i: 1, label: '南宁东站', sub: '10/1 深夜抵达 · 10/5 晚回 · 10/6 返深', lat: 22.8395, lng: 108.3978 },
+    { i: 2, label: '三门海', sub: '10/2 住 · 10/3 游', lat: 24.4200, lng: 107.1100 },
+    { i: 3, label: '浩坤湖', sub: '10/3 住', lat: 24.0950, lng: 106.5600 },
+    { i: 4, label: '鹅泉', sub: '10/4 上午', lat: 23.0900, lng: 106.3760 },
+    { i: 5, label: '德天瀑布', sub: '10/5 上午', lat: 22.8560, lng: 106.7550 }
+  ];
+
+  var LEGS = [
+    { f: 1, t: 2, km: '约 380 km', hr: '约 4.5 小时', when: '10/2 下午', note: 'G75 兰海高速 + G357，后半段盘山弯多，务必 16:00 前出发' },
+    { f: 2, t: 3, km: '约 110 km', hr: '约 2–2.5 小时', when: '10/3 午后', note: '经巴马方向横穿，山路为主' },
+    { f: 3, t: 4, km: '约 150 km', hr: '约 2–2.5 小时', when: '10/4 早上', note: '凌云 → 百色 → 靖西，走高速为主' },
+    { f: 4, t: 5, km: '约 115 km', hr: '约 2 小时 10 分', when: '10/4 午后', note: '靖西 → 湖润 → 硕龙镇，359 国道弯多坡陡' },
+    { f: 5, t: 1, km: '约 250 km', hr: '约 3.5–4 小时', when: '10/5 下午', note: '硕龙 → 南宁东站，全程高速，返程高峰留足时间' }
+  ];
+
+  var DAYS = [
+    {
+      d: '10/1', w: '周四', tt: '深圳 → 广州南 → 南宁东 · 高铁',
+      dr: '高铁 4h46m',
+      stop: 1,
+      legs: [],
+      rows: [
+        { t: '20:12', x: '<b>深圳北</b> 乘 <b>G6588</b> 出发（该车香港西九龙 19:49 始发，经停福田 19:57、深圳北 20:07/20:12）。' },
+        { t: '21:06', x: '抵达 <b>广州南站</b>。站内换乘，<b>只有 28 分钟</b>——同站免出站，跟着「中转换乘」指示走，别去取票窗口。' },
+        { t: '21:34', x: '<b>广州南</b> 乘 <b>D4784</b> 出发前往南宁东（历时 3 小时 24 分，二等座 250 元）。' },
+        { t: '次日 00:58', x: '<b>抵达南宁东站</b>。地铁已停运，出站打网约车（有正规上客区，别跟拉客的走），到市区酒店约 20–30 分钟。' }
+      ],
+      stay: '南宁 · 建议住<b>南宁东站附近</b>（凌晨到、少折腾），250–300 元/间（2 人住）'
+    },
+    {
+      d: '10/2', w: '周五', tt: '南宁半日 → 三门海',
+      dr: '380 km / 4.5 h',
+      stop: 2,
+      legs: [0],
+      alert: { cls: 'a-red', h: '这天的关键不是"玩多久"，而是"别拖到下午才出发"', p: '凌晨 00:58 才到南宁东、约 01:30 才睡下，上午本来就玩不动，硬排景点只会让出发更晚。建议睡到自然醒 → 10:00 取车 → <b>12:00 出发</b>（最晚别超过 16:00），16:30 就能到三门海、还赶得上傍晚踩点；若拖到 16:00 才出发，380 km 山路要开到 20:30，后半段全程摸黑跑盘山弯道。' },
+      rows: [
+        { t: '09:00', x: '睡到自然醒、退房。前一晚只睡了 6 小时左右，别定闹钟硬赶。' },
+        { t: '10:00', x: '到 <b>南宁东站</b>站区取租车（这里车行最密集，前一晚可微信跟门店约好交接时间）。' },
+        { t: '11:00', x: '市区吃碗 <b>老友粉</b>，顺手把水、零食、防滑鞋备好。想再逛就只逛 <b>三街两巷</b>（免费、就在市区），别加景点。' },
+        { t: '12:00', x: '<b>出发</b>前往凤山三门海，380 km、4.5 小时，走 G75 兰海高速转 G357。中途服务区休息一次。' },
+        { t: '16:30', x: '抵达 <b>三门海镇</b>。趁天没黑先去景区东门踩点、认停车场位置（导航必须搜"三门海景区东门"，搜西门会多绕一段）。' },
+        { t: '18:00', x: '入住、晚餐。景区门口农家乐偏贵，往 <b>坡心村</b> 走。早睡，第二天一早坐船。' }
+      ],
+      stay: '三门海山脚临水民宿 250–300 元/间（2 人住，推窗见湖、步行到码头）'
+    },
+    {
+      d: '10/3', w: '周六', tt: '三门海 → 浩坤湖',
+      dr: '110 km / 2–2.5 h',
+      stop: 3,
+      legs: [1],
+      alert: { cls: 'a-amber', h: '浩坤湖 16:30 停止项目售票', p: '想赶上浩坤湖画舫游船，<b>三门海必须 11:30 前结束、12:00 前出发</b>，否则到湖区只能环湖走栈道、坐不了船。' },
+      rows: [
+        { t: '08:30', x: '<b>三门海游船</b>（98 元/人，含讲解）：一开园就进，避开旅行团。木船穿 1、2、3 号天窗约 50 分钟，3 号要弯腰过水上天生桥。1 号天窗拍蓝水倒影最出片。' },
+        { t: '10:00', x: '上岸后免费徒步：出口左转约 100 m 大榕树旁石板路上山，20–30 分钟到 <b>半山观景台</b>，俯瞰三天窗全景。' },
+        { t: '11:30', x: '午餐（坡心村/凤山县城），12:00 前出发前往浩坤湖。' },
+        { t: '14:00', x: '抵达浩坤湖。渔人码头乘画舫（50 元/人，40 分钟）看三岛湾、睡美人山；或走环湖木栈道 + 玻璃无影桥。' },
+        { t: '17:30', x: '<b>弄外屯山顶观景台</b>看日落（门票 30 元，也可徒步约 20 分钟免费上）——张馨予同款机位。<b>17:00 前开始上山</b>，日落时段山路没有照明，别摸黑下山。' }
+      ],
+      stay: '浩坤湖湖区民宿 250–300 元/间（2 人住，<b>入住湖区民宿大多免大门票</b>，订前跟店家确认）'
+    },
+    {
+      d: '10/4', w: '周日', tt: '浩坤湖晨雾 → 鹅泉 → 硕龙镇',
+      dr: '265 km / 4.5 h',
+      stop: 4,
+      legs: [2, 3],
+      alert: { cls: 'a-amber', h: '10/4 的关键：早出发，抢鹅泉的清晨', p: '鹅泉最值钱的时段是清晨 7–9 点（水面无风如镜、常有薄雾，10 点后大巴团就到），所以这天必须 <b>06:40 前出发</b>，代价是浩坤湖晨雾只能看 30–40 分钟。好在下午空出约 2 小时，14:30 前后就能到硕龙，还来得及去明仕田园看日落。' },
+      rows: [
+        { t: '06:00', x: '<b>浩坤湖晨雾</b>（6:00–8:00 是全天唯一时段）：不用跑远，湖边或民宿露台就能拍雾漫峰林。看 30–40 分钟即走。' },
+        { t: '06:40', x: '<b>出发前往靖西鹅泉</b>，约 150 km、2–2.5 小时（经百色走高速）。' },
+        { t: '09:00', x: '<b>鹅泉</b>（46 元，7:00–19:30 开放）：德天瀑布的源头，泉水清澈见底、水草蔓生。<b>这是全行程最该赶早的点</b>——清晨水面几乎无波、常有薄雾，清代孔桥 + 跃鲤桥不用抢机位。游约 1.5 小时。' },
+        { t: '10:40', x: '靖西市区午餐（鹅泉离市区约 6 km，顺路补给）。' },
+        { t: '12:00', x: '出发前往硕龙镇，约 115 km、2 小时 10 分。走 359 国道，弯多坡陡，别赶。' },
+        { t: '14:30', x: '抵达硕龙镇，入住。<b>比原来早约 2 小时</b>，下午完全空出来了。' },
+        { t: '15:30', x: '机动：去 <b>明仕田园</b>坐竹筏看日落（16:30–18:30 是它最好看的时段，距硕龙约 40 km、单程 50 分钟）；不想动就在镇上逛中越风情街，早点休息。' }
+      ],
+      stay: '硕龙镇 250–300 元/间（2 人住，离德天景区仅约 3 km、10 分钟车程，专为次日一早进园）'
+    },
+    {
+      d: '10/5', w: '周一', tt: '德天跨国瀑布 → 南宁东站',
+      dr: '250 km / 3.5–4 h',
+      stop: 5,
+      legs: [4],
+      alert: { cls: 'a-amber', h: '德天必须上午进园 + 返程高峰', p: '德天在中国侧、朝东北看瀑布，<b>上午 9–11 点顺光、下午逆光</b>，而且 10 点后旅行团大量涌入。10/4 住硕龙镇就是为了这个：<b>07:30 到游客中心排队，8:00 乘第一批观光车</b>。下午返程 250 km，<b>12:30 前必须出发</b>，否则到南宁要 18:30 以后。' },
+      rows: [
+        { t: '07:30', x: '到 <b>德天景区游客中心</b>排队（8:00 开园）。门票 115 元含大门票+观光车，<b>观光车是必购项</b>；国庆需提前 2–5 天线上分时段预约，别指望现场买票。' },
+        { t: '08:00', x: '<b>德天跨国瀑布</b>：乘第一批观光车入园 → 稻田咖啡 → 界河竹筏（48 元自费，可一筏跨两国）→ 836 号界碑 → 多级观景台俯瞰中越双瀑。<b>9–11 点顺光</b>是全天最好的观景时段，早进园还能避开旅行团。' },
+        { t: '11:30', x: '出园，硕龙镇或景区门口午餐。' },
+        { t: '12:30', x: '出发返回南宁东站，约 250 km、3.5–4 小时。10/5 下午是返程高峰，留足时间。' },
+        { t: '16:30', x: '抵达南宁东站，<b>还车</b>（站区还车点多，10/6 早上再还也行）。' },
+        { t: '晚上', x: '吃顿好的：柠檬鸭 / 烤鱼 / 螺蛳粉收尾。早点休息，第二天赶高铁。' }
+      ],
+      stay: '南宁东站附近 250–300 元/间（2 人住），10/6 进站最省事'
+    },
+    {
+      d: '10/6', w: '周二', tt: '南宁东 → 深圳北 · 高铁',
+      dr: '高铁 3.5 h',
+      stop: 1,
+      legs: [],
+      rows: [
+        { t: '上午', x: '<b>南宁东 → 深圳北</b>高铁，全程 665 km。<br>参考车次：<b>G2911 08:33 → 12:01</b>（3 小时 28 分，二等座 324.5 元，最贴合"上午走上午到"）；<b>G927 11:18 → 14:49</b>（不用早起）；<b>G2955 14:13 → 17:46</b>（下午备选）。' },
+        { t: '提示', x: '南宁东站周边还车点密集，<b>建议 10/5 傍晚就把车还掉</b>，10/6 只带行李进站。发车前 40–60 分钟到站；国庆安检排队久，按 60 分钟留。凭身份证进站，无需取票。' }
+      ],
+      stay: '返深圳，行程结束'
+    }
+  ];
+
+  /* ---------- 右侧时间线 ---------- */
+  function navUrl(a, b) {
+    return 'https://uri.amap.com/navigation?from=' + a.lng + ',' + a.lat + ',' + encodeURIComponent(a.label) +
+           '&to=' + b.lng + ',' + b.lat + ',' + encodeURIComponent(b.label) +
+           '&mode=car&policy=1&src=guangxi-itinerary&coordinate=gaode&callnative=0';
+  }
+
+  var daysEl = document.getElementById('days');
+  var html = '';
+  for (var i = 0; i < DAYS.length; i++) {
+    var d = DAYS[i];
+    html += '<div class="day" data-stop="' + (d.stop || '') + '">';
+    html += '<div class="day-hd"><span class="dt">' + d.d + ' ' + d.w + '</span>' +
+            '<span class="tt">' + d.tt + '</span><span class="dr">' + d.dr + '</span></div>';
+    html += '<div class="day-bd">';
+
+    if (d.alert) {
+      html += '<div class="alert ' + d.alert.cls + '"><b>' + d.alert.h + '</b>：' + d.alert.p + '</div>';
+    }
+    for (var r = 0; r < d.rows.length; r++) {
+      html += '<div class="row"><div class="tm">' + d.rows[r].t + '</div><div class="tx">' + d.rows[r].x + '</div></div>';
+    }
+
+    /* 按天显式绑定自驾路段（不能用 stop 匹配：1 号点既是起点也是终点，会串到 10/2 那段） */
+    var legIdxs = d.legs || [];
+    for (var k = 0; k < legIdxs.length; k++) {
+      var leg = LEGS[legIdxs[k]];
+      if (!leg) { continue; }
+      var from = STOPS[leg.f - 1], to = STOPS[leg.t - 1];
+      html += '<div class="legrow"><span>' + leg.when + '　<b>' + from.label + ' → ' + to.label + '</b>　' +
+              '<b>' + leg.km + '</b> · <b>' + leg.hr + '</b></span>' +
+              '<a href="' + navUrl(from, to) + '" target="_blank" rel="noopener">导航</a></div>';
+      if (leg.note) {
+        html += '<div class="row" style="margin-top:4px;"><div class="tm"></div><div class="tx" style="font-size:12px;color:#7d8c89;">' + leg.note + '</div></div>';
+      }
+    }
+    if (d.stay) {
+      html += '<div class="stay"><span class="k">住</span><span>' + d.stay + '</span></div>';
+    }
+    html += '</div></div>';
+  }
+  daysEl.innerHTML = html;
+
+  /* ---------- 地图 ---------- */
+  var mapEl = document.getElementById('map');
+  var isNarrow = mapEl.clientWidth < 640;
+  var map, markers = null, legMarkers = null;
+
+  try {
+    map = new TMap.Map(mapEl, {
+      center: new TMap.LatLng(23.70, 107.30),
+      zoom: isNarrow ? 7 : 8
+    });
+  } catch (e) {
+    mapEl.innerHTML = '<div style="padding:24px;color:#a32d2d">地图加载失败，请检查网络后刷新。</div>';
+    return;
+  }
+
+  var COLORS = { 1: '#185fa5', 2: '#0f6e56', 3: '#0f6e56', 4: '#7a5c1e', 5: '#7a5c1e', 6: '#8a3b3b', 7: '#185fa5' };
+
+  function pinSvg(n, color) {
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="42" viewBox="0 0 32 42">' +
+      '<path d="M16 41C16 41 30 23.5 30 15C30 7.7 23.8 1.5 16 1.5C8.2 1.5 2 7.7 2 15C2 23.5 16 41 16 41Z" fill="' + color + '" stroke="#ffffff" stroke-width="2"/>' +
+      '<text x="16" y="20" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="13.5" font-weight="bold" fill="#ffffff">' + n + '</text>' +
+      '</svg>';
+  }
+
+  try {
+    var styles = {}, geometries = [];
+    for (var m = 0; m < STOPS.length; m++) {
+      var s = STOPS[m], sid = 'p' + s.i;
+      styles[sid] = new TMap.MarkerStyle({
+        width: 32, height: 42,
+        anchor: { x: 16, y: 42 },
+        src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(pinSvg(s.i, COLORS[s.i] || '#0f6e56'))
+      });
+      geometries.push({ id: sid, styleId: sid, position: new TMap.LatLng(s.lat, s.lng) });
+    }
+    markers = new TMap.MultiMarker({ map: map, styles: styles, geometries: geometries });
+  } catch (e) { }
+
+  try {
+    new TMap.MultiLabel({
+      map: map,
+      styles: {
+        lb: new TMap.LabelStyle({
+          color: '#0d2e26', size: 12, offset: { x: 0, y: -48 },
+          alignment: 'center', verticalAlignment: 'bottom'
+        })
+      },
+      geometries: STOPS.map(function (s) {
+        return { id: 'l' + s.i, styleId: 'lb', position: new TMap.LatLng(s.lat, s.lng), content: s.label };
+      })
+    });
+  } catch (e) { }
+
+  /* 与 pathOf 完全一致地算出弧线上任意一点，r=0.5 即线段中点 */
+  function arcPoint(a, b, r) {
+    var dLat = -(b.lng - a.lng), dLng = (b.lat - a.lat);
+    var norm = Math.sqrt(dLat * dLat + dLng * dLng) || 1;
+    var lat = a.lat + (b.lat - a.lat) * r;
+    var lng = a.lng + (b.lng - a.lng) * r;
+    var bow = Math.sin(Math.PI * r) * 0.05;
+    return new TMap.LatLng(lat + (dLat / norm) * bow, lng + (dLng / norm) * bow);
+  }
+
+  function pathOf(a, b) {
+    var pts = [], n = 24;
+    for (var t = 0; t <= n; t++) { pts.push(arcPoint(a, b, t / n)); }
+    return pts;
+  }
+
+  /* 里程 / 车程 小标签（画在地图上，字号固定、不随缩放变化） */
+  function badgeSvg(km, hr, color) {
+    var w = 64, h = 31;
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+      '<rect x="1" y="1" width="' + (w - 2) + '" height="' + (h - 2) + '" rx="7" fill="#ffffff" stroke="' + color + '" stroke-width="1.2"/>' +
+      '<text x="' + (w / 2) + '" y="13.5" text-anchor="middle" font-family="PingFang SC,Helvetica,Arial,sans-serif" font-size="10" font-weight="bold" fill="#0d2e26">' + km + '</text>' +
+      '<text x="' + (w / 2) + '" y="25.5" text-anchor="middle" font-family="PingFang SC,Helvetica,Arial,sans-serif" font-size="8.5" fill="' + color + '">' + hr + '</text>' +
+      '</svg>';
+  }
+
+  try {
+    var rGeoms = [];
+    for (var q = 0; q < LEGS.length; q++) {
+      var A = STOPS[LEGS[q].f - 1], B = STOPS[LEGS[q].t - 1];
+      rGeoms.push({ id: 'r' + (q + 1), styleId: 'route', paths: pathOf(A, B) });
+    }
+    new TMap.MultiPolyline({
+      map: map,
+      styles: {
+        route: new TMap.PolylineStyle({
+          color: '#0F6E56', width: 4,
+          borderWidth: 1.5, borderColor: '#ffffff', lineCap: 'round'
+        })
+      },
+      geometries: rGeoms
+    });
+  } catch (e) { }
+
+  /* ---------- 每段里程 / 车程 标签（贴在线段中点） ---------- */
+  var LEG_BADGES = null;
+  function buildLegBadges() {
+    var styles = {}, geoms = [];
+    for (var i = 0; i < LEGS.length; i++) {
+      var lg = LEGS[i];
+      var A = STOPS[lg.f - 1], B = STOPS[lg.t - 1];
+      var kmTxt = lg.km.replace(/^约\s*/, '');
+      var hrTxt = lg.hr.replace(/^约\s*/, '');
+      var sid = 'lb' + i;
+      styles[sid] = new TMap.MarkerStyle({
+        width: 64, height: 31,
+        anchor: { x: 32, y: 15.5 },
+        src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(badgeSvg(kmTxt, hrTxt, COLORS[lg.t] || '#0f6e56'))
+      });
+      geoms.push({
+        id: sid, styleId: sid, position: arcPoint(A, B, 0.5),
+        properties: { day: lg.f, tip: lg.when + '　' + A.label + ' → ' + B.label + '　' + lg.km + ' · ' + lg.hr + '　' + (lg.note || '') }
+      });
+    }
+    return { styles: styles, geoms: geoms };
+  }
+
+  try {
+    LEG_BADGES = buildLegBadges();
+    legMarkers = new TMap.MultiMarker({ map: map, styles: LEG_BADGES.styles, geometries: LEG_BADGES.geoms });
+    legMarkers.on('click', function (evt) {
+      var g = evt.geometry;
+      if (!g || !g.properties) { return; }
+      var all = daysEl.querySelectorAll('.day');
+      for (var i = 0; i < all.length; i++) {
+        if (parseInt(all[i].getAttribute('data-stop'), 10) === g.properties.day) {
+          if (all[i].scrollIntoView) { all[i].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          all[i].style.outline = '2px solid #9FE1CB';
+          (function (el) { setTimeout(function () { el.style.outline = 'none'; }, 1600); })(all[i]);
+        }
+      }
+    });
+  } catch (e) { legMarkers = null; }
+
+  var legToggle = document.getElementById('legToggle');
+  if (legToggle) {
+    if (!legMarkers) {
+      legToggle.style.display = 'none';
+    } else {
+      legToggle.addEventListener('click', function () {
+        var on = legToggle.getAttribute('data-on') !== '0';
+        try {
+          if (on) { legMarkers.setGeometries([]); legToggle.textContent = '显示里程'; legToggle.setAttribute('data-on', '0'); }
+          else { legMarkers.setGeometries(LEG_BADGES.geoms); legToggle.textContent = '隐藏里程'; legToggle.setAttribute('data-on', '1'); }
+        } catch (e) { }
+      });
+    }
+  }
+
+  function focusStop(idx) {
+    for (var i = 0; i < STOPS.length; i++) {
+      if (STOPS[i].i === idx && map) {
+        try { map.setCenter(new TMap.LatLng(STOPS[i].lat, STOPS[i].lng)); map.setZoom(11); } catch (e) { }
+        return;
+      }
+    }
+  }
+
+  daysEl.addEventListener('click', function (ev) {
+    var card = ev.target.closest ? ev.target.closest('.day') : null;
+    if (!card || !card.getAttribute('data-stop')) { return; }
+    focusStop(parseInt(card.getAttribute('data-stop'), 10));
+  });
+
+  if (markers) {
+    markers.on('click', function (evt) {
+      var id = evt.geometry && evt.geometry.id;
+      if (!id) { return; }
+      var idx = parseInt(String(id).replace('p', ''), 10);
+      var all = daysEl.querySelectorAll('.day');
+      for (var i = 0; i < all.length; i++) {
+        if (parseInt(all[i].getAttribute('data-stop'), 10) === idx) {
+          if (all[i].scrollIntoView) { all[i].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+          all[i].style.outline = '2px solid #9FE1CB';
+          (function (el) { setTimeout(function () { el.style.outline = 'none'; }, 1600); })(all[i]);
+        }
+      }
+    });
+  }
+
+  /* ---------- 左右分栏：拖动分隔条调整面板宽度 ---------- */
+  (function initSplitter() {
+    var panelEl = document.querySelector('.panel');
+    var gutterEl = document.getElementById('gutter');
+    if (!panelEl || !gutterEl) { return; }
+
+    var DEFAULT_W = 430;   /* 与原设计一致的默认宽度 */
+    var MIN_PANEL = 300;   /* 面板最小宽度 */
+    var MIN_MAP   = 320;   /* 地图至少保留的宽度 */
+    var STORE_KEY = 'guangxi-trip-panel-width';
+
+    var current = DEFAULT_W;
+    var rafId = 0;
+    var selfResize = false;
+    var lastNarrow = mapEl.clientWidth < 640;
+    var lastSize = '';
+
+    function maxPanel() { return Math.max(MIN_PANEL, window.innerWidth - MIN_MAP); }
+    function clampWidth(w) { return Math.max(MIN_PANEL, Math.min(maxPanel(), Math.round(w))); }
+
+    function paint(w) {
+      current = clampWidth(w);
+      panelEl.style.flex  = '0 0 ' + current + 'px';
+      panelEl.style.width = current + 'px';
+      return current;
+    }
+
+    /* 真正让地图重算画布尺寸；force=true 时跳过尺寸比对 */
+    function syncMapSize(force) {
+      if (!map) { return; }
+      var key = mapEl.clientWidth + 'x' + mapEl.clientHeight;
+      if (!force && key === lastSize) { return; }
+      lastSize = key;
+      var narrow = mapEl.clientWidth < 640;
+      if (narrow !== lastNarrow) {
+        lastNarrow = narrow;
+        try { map.setZoom(narrow ? 7 : 8); } catch (e) { }
+      }
+      try { if (typeof map.resize === 'function') { map.resize(); } } catch (e) { }
+      /* 再派发一次 resize，兼容靠窗口尺寸重绘底图的实现 */
+      selfResize = true;
+      try { window.dispatchEvent(new Event('resize')); } catch (e) { }
+      selfResize = false;
+    }
+
+    /* 拖动过程中按帧节流，避免每移动 1px 就重建一次画布 */
+    function notifyMap() {
+      if (rafId) { return; }
+      rafId = window.requestAnimationFrame(function () {
+        rafId = 0;
+        syncMapSize(false);
+      });
+    }
+
+    /* 松手 / 尺寸稳定后再补两次，兜住延迟重排 */
+    var settleTimers = [];
+    function settle() {
+      for (var i = 0; i < settleTimers.length; i++) { clearTimeout(settleTimers[i]); }
+      settleTimers = [0, 150, 500].map(function (ms) {
+        return setTimeout(function () { syncMapSize(true); }, ms);
+      });
+    }
+
+    function save(w) {
+      try { window.localStorage.setItem(STORE_KEY, String(w)); } catch (e) { }
+    }
+
+    /* 恢复上次拖到的宽度；首次访问用默认值 */
+    var saved = 0;
+    try { saved = parseInt(window.localStorage.getItem(STORE_KEY), 10) || 0; } catch (e) { }
+
+    if (window.innerWidth > 880) {
+      paint(saved > 0 ? saved : DEFAULT_W);
+      notifyMap();
+    }
+
+    var dragging = false, startX = 0, startW = 0;
+
+    function onDown(ev) {
+      if (window.innerWidth <= 880) { return; }   /* 窄屏是上下布局，不启用拖动 */
+      dragging = true;
+      startX = ev.clientX;
+      startW = panelEl.getBoundingClientRect().width;
+      gutterEl.classList.add('active');
+      document.body.classList.add('gx-resizing');
+      try { gutterEl.setPointerCapture(ev.pointerId); } catch (e) { }
+      ev.preventDefault();
+    }
+    function onMove(ev) {
+      if (!dragging) { return; }
+      paint(startW - (ev.clientX - startX));
+      notifyMap();
+      ev.preventDefault();
+    }
+    function onUp(ev) {
+      if (!dragging) { return; }
+      dragging = false;
+      gutterEl.classList.remove('active');
+      document.body.classList.remove('gx-resizing');
+      try { gutterEl.releasePointerCapture(ev.pointerId); } catch (e) { }
+      settle();
+      save(current);
+    }
+
+    gutterEl.addEventListener('pointerdown', onDown);
+    gutterEl.addEventListener('pointermove', onMove);
+    gutterEl.addEventListener('pointerup', onUp);
+    gutterEl.addEventListener('pointercancel', onUp);
+
+    /* 双击还原默认宽度 */
+    gutterEl.addEventListener('dblclick', function () {
+      paint(DEFAULT_W); notifyMap(); settle(); save(current);
+    });
+
+    /* 键盘：← → 微调（Shift 加速），Home / End 到两端 */
+    gutterEl.addEventListener('keydown', function (ev) {
+      var step = ev.shiftKey ? 60 : 20;
+      if (ev.key === 'ArrowLeft') { paint(current + step); }
+      else if (ev.key === 'ArrowRight') { paint(current - step); }
+      else if (ev.key === 'Home') { paint(MIN_PANEL); }
+      else if (ev.key === 'End') { paint(maxPanel()); }
+      else { return; }
+      notifyMap(); settle(); save(current); ev.preventDefault();
+    });
+
+    /* 浏览器窗口尺寸变化时重新收敛宽度 */
+    window.addEventListener('resize', function () {
+      if (selfResize) { return; }
+      if (window.innerWidth <= 880) {
+        panelEl.style.flex = '';
+        panelEl.style.width = '';
+        return;
+      }
+      paint(current);
+      notifyMap();
+      settle();
+    });
+
+    /* 地图容器尺寸一旦真的变化就同步，兜住拖动以外的所有情形 */
+    if (window.ResizeObserver) {
+      try {
+        new ResizeObserver(function () { notifyMap(); }).observe(mapEl);
+      } catch (e) { }
+    }
+  })();
+})();
+</script>
+</body>
+</html>

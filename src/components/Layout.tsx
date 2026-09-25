@@ -5,6 +5,7 @@ import {
   BarChart3,
   BriefcaseBusiness,
   FileText,
+  FolderOpen,
   LayoutDashboard,
   ListChecks,
   Menu,
@@ -38,6 +39,7 @@ const NAV: NavItem[] = [
   { to: '/work-hours', label: '工时统计', icon: BriefcaseBusiness },
   { to: '/statistics', label: '数据统计', icon: BarChart3 },
   { to: '/weekly', label: 'AI 周报', icon: FileText },
+  { to: '/other', label: '其他', icon: FolderOpen },
   // 「小工具」功能保留但暂时不在主导航露出，避免新用户觉得是个半成品页面
   // { to: '/tools', label: '小工具', icon: Wrench },
   { to: '/settings', label: '设置', icon: SettingsIcon },
