@@ -1,0 +1,4 @@
+interface:
+  display_name: "Add WorkAssistant Webpage"
+  short_description: "Add and publish HTML pages in WorkAssistant"
+  default_prompt: "Add or update an HTML webpage in WorkAssistant's 「其他」 section, regenerate the file index, build it, and verify the result."
