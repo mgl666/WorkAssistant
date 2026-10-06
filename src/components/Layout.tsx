@@ -11,6 +11,7 @@ import {
   Menu,
   Moon,
   NotebookPen,
+  Presentation,
   Repeat2,
   Settings as SettingsIcon,
   Sun,
@@ -35,6 +36,7 @@ const NAV: NavItem[] = [
   { to: '/daily', label: '周期任务', icon: Repeat2 },
   { to: '/goals', label: '长期目标', icon: Target },
   { to: '/notes', label: '备忘录', icon: NotebookPen },
+  { to: '/whiteboard', label: '白板', icon: Presentation },
   { to: '/pomodoro', label: '番茄时钟', icon: Timer },
   { to: '/work-hours', label: '工时统计', icon: BriefcaseBusiness },
   { to: '/statistics', label: '数据统计', icon: BarChart3 },
@@ -192,7 +194,9 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-7xl flex-1 overflow-x-hidden p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
+        <main className={cn('w-full flex-1', pathname === '/whiteboard'
+          ? 'h-[calc(100dvh-3.5rem)] min-h-0 overflow-hidden'
+          : 'mx-auto max-w-7xl overflow-x-hidden p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6')}>
           <Outlet />
         </main>
       </div>

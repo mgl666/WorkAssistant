@@ -45,6 +45,8 @@ export async function runSync(): Promise<void> {
     const result = await apiFetch<SyncResponse>('/sync', {
       method: 'POST', body: JSON.stringify({ since: store.sync.lastPulledAt, changes }),
     });
+    // A response from the previous account must never enter the current workspace.
+    if (useStore.getState().workspaceKey !== store.workspaceKey) return;
     for (const table of SYNC_TABLES) {
       const tableChanges = result.changes.filter((change) => change.table === table);
       const alive = tableChanges.filter((change) => !change.deleted).map((change) => change.data as SyncRecord);
@@ -52,9 +54,16 @@ export async function runSync(): Promise<void> {
       if (alive.length) useStore.getState().applyRemote(table, alive);
       if (removed.length) useStore.getState().removeRemote(table, removed);
     }
-    useStore.getState().clearDirty(dirtyKeys);
+    // Edits made while the request was in flight still need to be pushed.
+    const unchangedKeys = dirtyKeys.filter((key) => {
+      const sent = changes.find((change) => syncKey(change.table, change.id) === key);
+      return sent && (useStore.getState()[sent.table] as SyncRecord[])
+        .some((record) => record.id === sent.id && record.updatedAt === sent.updatedAt);
+    });
+    useStore.getState().clearDirty(unchangedKeys);
     useStore.getState().setSync({ status: 'idle', lastPulledAt: result.cursor, lastSyncAt: Date.now(), lastError: '' });
   } catch (err) {
+    if (useStore.getState().workspaceKey !== store.workspaceKey) return;
     if (tombstones.length) useStore.setState((state) => ({ tombstones: [...state.tombstones, ...tombstones] }));
     const message = err instanceof Error ? err.message : String(err);
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;

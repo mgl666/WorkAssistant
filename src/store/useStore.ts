@@ -4,7 +4,7 @@ import { uid } from '@/lib/utils';
 import { toKey } from '@/lib/date';
 
 export type EventColor = 'indigo' | 'emerald' | 'amber' | 'rose' | 'sky' | 'violet';
-export const SYNC_TABLES = ['events', 'todos', 'lists', 'notes', 'sessions', 'daily_tasks', 'goals', 'work_logs'] as const;
+export const SYNC_TABLES = ['events', 'todos', 'lists', 'notes', 'sessions', 'daily_tasks', 'goals', 'work_logs', 'whiteboards'] as const;
 export type SyncTable = (typeof SYNC_TABLES)[number];
 export type SyncStatus = 'disabled' | 'idle' | 'syncing' | 'error' | 'offline';
 export interface SyncState { status: SyncStatus; lastPulledAt: number; lastSyncAt: number; lastError: string; email: string | null; userId: string | null }
@@ -28,15 +28,18 @@ export interface Settings {
   theme: 'light' | 'dark'; focusMin: number; shortMin: number; longMin: number; longEvery: number; longBreakEnabled: boolean; autoNext: boolean; sound: boolean;
   aiEndpoint: string; aiModel: string; /** 仅保存在当前设备 */ aiApiKey: string;
 }
-export type SyncRecord = CalEvent | Todo | TodoList | Note | PomodoroSession | DailyTask | LongTermGoal | WorkLog;
+export interface WhiteboardRecord { id: string; scene: string; createdAt: number; updatedAt: number }
+export type SyncRecord = CalEvent | Todo | TodoList | Note | PomodoroSession | DailyTask | LongTermGoal | WorkLog | WhiteboardRecord;
 export const DEFAULT_LIST_ID = 'inbox';
 export const GUEST_WORKSPACE = 'guest';
 
 interface WorkspaceSnapshot {
+  whiteboards: WhiteboardRecord[];
   events: CalEvent[]; todos: Todo[]; lists: TodoList[]; notes: Note[]; sessions: PomodoroSession[]; daily_tasks: DailyTask[]; goals: LongTermGoal[]; work_logs: WorkLog[];
   settings: Settings; timer: PomodoroTimer; dirty: Record<string, 1>; tombstones: Tombstone[]; lastPulledAt: number; lastSyncAt: number;
 }
 interface State extends Omit<WorkspaceSnapshot, 'lastPulledAt' | 'lastSyncAt'> {
+  saveWhiteboard: (scene: string) => void;
   workspaceKey: string; workspaces: Record<string, WorkspaceSnapshot>; sync: SyncState;
   addEvent: (e: Omit<CalEvent, 'id' | 'createdAt' | 'updatedAt'>) => string; updateEvent: (id: string, patch: Partial<CalEvent>) => void; removeEvent: (id: string) => void; toggleEvent: (id: string) => void;
   addTodo: (t: Partial<Todo>) => string; updateTodo: (id: string, patch: Partial<Todo>) => void; removeTodo: (id: string) => void; toggleTodo: (id: string) => void; clearCompletedTodos: (listId?: string) => void;
@@ -79,13 +82,19 @@ export const defaultSettings: Settings = {
 const defaultSync: SyncState = { status: 'disabled', lastPulledAt: 0, lastSyncAt: 0, lastError: '', email: null, userId: null };
 const defaultTimer = (): PomodoroTimer => ({ mode: 'focus', remaining: 25 * 60, endAt: null, round: 0, task: '' });
 function blankWorkspace(theme: Settings['theme'] = 'light'): WorkspaceSnapshot {
-  return { events: [], todos: [], lists: [{ id: DEFAULT_LIST_ID, name: '我的任务', updatedAt: 1 }], notes: [], sessions: [], daily_tasks: [], goals: [], work_logs: [], settings: { ...defaultSettings, theme }, timer: defaultTimer(), dirty: {}, tombstones: [], lastPulledAt: 0, lastSyncAt: 0 };
+  return { whiteboards: [], events: [], todos: [], lists: [{ id: DEFAULT_LIST_ID, name: '我的任务', updatedAt: 1 }], notes: [], sessions: [], daily_tasks: [], goals: [], work_logs: [], settings: { ...defaultSettings, theme }, timer: defaultTimer(), dirty: {}, tombstones: [], lastPulledAt: 0, lastSyncAt: 0 };
 }
-function snapshot(s: State): WorkspaceSnapshot { return { events: s.events, todos: s.todos, lists: s.lists, notes: s.notes, sessions: s.sessions, daily_tasks: s.daily_tasks, goals: s.goals, work_logs: s.work_logs, settings: s.settings, timer: s.timer, dirty: s.dirty, tombstones: s.tombstones, lastPulledAt: s.sync.lastPulledAt, lastSyncAt: s.sync.lastSyncAt }; }
+function snapshot(s: State): WorkspaceSnapshot { return { whiteboards: s.whiteboards, events: s.events, todos: s.todos, lists: s.lists, notes: s.notes, sessions: s.sessions, daily_tasks: s.daily_tasks, goals: s.goals, work_logs: s.work_logs, settings: s.settings, timer: s.timer, dirty: s.dirty, tombstones: s.tombstones, lastPulledAt: s.sync.lastPulledAt, lastSyncAt: s.sync.lastSyncAt }; }
 const initial = blankWorkspace();
 
 export const useStore = create<State>()(persist((set, get) => ({
   ...initial, workspaceKey: GUEST_WORKSPACE, workspaces: {}, sync: defaultSync,
+  saveWhiteboard: (scene) => set((s) => {
+    const old = s.whiteboards.find((board) => board.id === 'main');
+    if (old?.scene === scene) return s;
+    const now = Math.max(Date.now(), (old?.updatedAt ?? 0) + 1);
+    return { whiteboards: [{ id: 'main', scene, createdAt: old?.createdAt ?? now, updatedAt: now }], dirty: withDirty(s.dirty, 'whiteboards', 'main') };
+  }),
   addEvent: (e) => { const id = uid(), now = Date.now(); set((s) => ({ events: [...s.events, { ...e, id, done: e.done ?? false, createdAt: now, updatedAt: now }], dirty: withDirty(s.dirty, 'events', id) })); return id; },
   updateEvent: (id, patch) => set((s) => ({ events: s.events.map((e) => e.id === id ? { ...e, ...patch, updatedAt: Date.now() } : e), dirty: withDirty(s.dirty, 'events', id) })),
   removeEvent: (id) => set((s) => { const target = s.events.find((e) => e.id === id); if (!target) return s; return { events: s.events.filter((e) => e.id !== id), tombstones: pushTombstone(s.tombstones, tombstoneOf('events', target, Date.now())), dirty: dropDirty(s.dirty, 'events', id) }; }),
@@ -319,7 +328,7 @@ export const useStore = create<State>()(persist((set, get) => ({
     const guestToAdopt = s.workspaces[GUEST_WORKSPACE];
     const source = adoptCurrent && guestToAdopt ? guestToAdopt : current;
     const candidate = adoptCurrent ? { ...source, lastPulledAt: 0, lastSyncAt: 0 } : (s.workspaces[key] ?? blankWorkspace(s.settings.theme));
-    const target = { ...candidate, goals: candidate.goals ?? [], work_logs: candidate.work_logs ?? [], timer: candidate.timer ?? defaultTimer() };
+    const target = { ...candidate, whiteboards: candidate.whiteboards ?? [], goals: candidate.goals ?? [], work_logs: candidate.work_logs ?? [], timer: candidate.timer ?? defaultTimer() };
     return { ...target, workspaceKey: key, workspaces: { ...s.workspaces, [s.workspaceKey]: current }, sync: { ...s.sync, lastPulledAt: target.lastPulledAt, lastSyncAt: target.lastSyncAt, lastError: '' } };
   }),
 
@@ -330,6 +339,7 @@ export const useStore = create<State>()(persist((set, get) => ({
       const now = Date.now();
       const stamp = <T,>(arr: unknown, offset = 0) => (Array.isArray(arr) ? arr : []).map((r: unknown, i) => ({ ...(r as object), updatedAt: (r as { updatedAt?: number }).updatedAt ?? now + offset + i })) as T[];
       const incoming = {
+        whiteboards: stamp<WhiteboardRecord>(data.whiteboards, 8000),
         events: stamp<CalEvent>(data.events),
         todos: stamp<Todo>(data.todos, 1000).map((t) => ({ ...t, priority: t.priority ?? 3 })),
         lists: Array.isArray(data.lists) ? stamp<TodoList>(data.lists, 2000) : blankWorkspace().lists,
@@ -383,14 +393,15 @@ export const useStore = create<State>()(persist((set, get) => ({
     return { ...blank, settings: { ...blank.settings, theme: s.settings.theme, aiEndpoint: s.settings.aiEndpoint, aiModel: s.settings.aiModel, aiApiKey: s.settings.aiApiKey }, tombstones, sync: { ...s.sync } };
   }),
 }), {
-  name: 'work-assistant-v1', version: 12,
+  name: 'work-assistant-v1', version: 13,
   migrate: (persisted) => {
     const s = (persisted ?? {}) as Partial<State>, now = Date.now();
     const stamp = <T extends { updatedAt?: number }>(arr: T[] | undefined, offset = 0) => (Array.isArray(arr) ? arr : []).map((r, i) => ({ ...r, updatedAt: r.updatedAt ?? now + offset + i }));
     const events = stamp(s.events) as CalEvent[], todos = stamp(s.todos, 1000).map((t) => ({ ...t, priority: t.priority ?? 3 })) as Todo[], lists = stamp(s.lists, 2000) as TodoList[], notes = stamp(s.notes, 3000) as Note[], sessions = stamp(s.sessions, 4000) as PomodoroSession[], daily_tasks = (stamp(s.daily_tasks, 5000) as DailyTask[]).map(normalizeDailyTask), goals = stamp(s.goals, 6000).map((g, index) => ({ ...g, tasks: Array.isArray(g.tasks) ? g.tasks.map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) : [], order: Number.isFinite((g as LongTermGoal).order) ? (g as LongTermGoal).order : index })) as LongTermGoal[], work_logs = stamp(s.work_logs, 7000) as WorkLog[];
-    const dirty: Record<string, 1> = { ...(s.dirty ?? {}) }, collections: Record<SyncTable, Array<{ id: string }>> = { events, todos, lists, notes, sessions, daily_tasks, goals, work_logs };
+    const whiteboards = stamp(s.whiteboards, 8000) as WhiteboardRecord[];
+    const dirty: Record<string, 1> = { ...(s.dirty ?? {}) }, collections: Record<SyncTable, Array<{ id: string }>> = { events, todos, lists, notes, sessions, daily_tasks, goals, work_logs, whiteboards };
     SYNC_TABLES.forEach((table) => collections[table].forEach((r) => { dirty[syncKey(table, r.id)] = 1; }));
     const workspaces = Object.fromEntries(Object.entries(s.workspaces ?? {}).map(([key, workspace]) => [key, { ...workspace, daily_tasks: (workspace.daily_tasks ?? []).map(normalizeDailyTask), goals: (workspace.goals ?? []).map((goal, index) => ({ ...goal, order: Number.isFinite(goal.order) ? goal.order : index, tasks: (goal.tasks ?? []).map((task, taskIndex) => ({ ...task, order: Number.isFinite(task.order) ? task.order : taskIndex })) })), work_logs: workspace.work_logs ?? [], timer: workspace.timer ?? defaultTimer() }]));
-    return { ...s, events, todos, lists: Array.isArray(s.lists) ? lists : blankWorkspace().lists, notes, sessions, daily_tasks, goals, work_logs, timer: s.timer ?? defaultTimer(), dirty, tombstones: Array.isArray(s.tombstones) ? s.tombstones : [], settings: { ...defaultSettings, ...(s.settings ?? {}) }, workspaceKey: s.workspaceKey ?? GUEST_WORKSPACE, workspaces, sync: { ...defaultSync, ...(s.sync ?? {}) } } as State;
+    return { ...s, whiteboards, events, todos, lists: Array.isArray(s.lists) ? lists : blankWorkspace().lists, notes, sessions, daily_tasks, goals, work_logs, timer: s.timer ?? defaultTimer(), dirty, tombstones: Array.isArray(s.tombstones) ? s.tombstones : [], settings: { ...defaultSettings, ...(s.settings ?? {}) }, workspaceKey: s.workspaceKey ?? GUEST_WORKSPACE, workspaces, sync: { ...defaultSync, ...(s.sync ?? {}) } } as State;
   },
 }));

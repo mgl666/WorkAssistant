@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import SyncManager from '@/components/SyncManager';
@@ -17,6 +18,8 @@ import Statistics from '@/pages/Statistics';
 import WorkHours from '@/pages/WorkHours';
 import Other from '@/pages/Other';
 
+const Whiteboard = lazy(() => import('@/pages/Whiteboard'));
+
 export default function App() {
   return (
     <HashRouter>
@@ -34,6 +37,7 @@ export default function App() {
             <Route path="/daily" element={<Daily />} />
             <Route path="/goals" element={<LongTermGoals />} />
             <Route path="/notes" element={<Notes />} />
+            <Route path="/whiteboard" element={<Suspense fallback={<p className="p-4 text-sm text-slate-500">正在加载白板…</p>}><Whiteboard /></Suspense>} />
             <Route path="/weekly" element={<Weekly />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/other" element={<Other />} />

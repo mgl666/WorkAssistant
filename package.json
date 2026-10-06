@@ -7,15 +7,16 @@
     "node": ">=20"
   },
   "scripts": {
-    "predev": "node scripts/generate-file-index.mjs",
+    "predev": "node scripts/generate-file-index.mjs && node scripts/prepare-whiteboard.mjs",
     "dev": "vite",
-    "prebuild": "node scripts/generate-file-index.mjs",
+    "prebuild": "node scripts/generate-file-index.mjs && node scripts/prepare-whiteboard.mjs",
     "build": "tsc --noEmit && vite build",
     "files:index": "node scripts/generate-file-index.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.1",
     "@milkdown/crepe": "^7.22.1",
     "lucide-react": "^0.454.0",
     "react": "^18.3.1",
