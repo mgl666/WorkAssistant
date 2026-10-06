@@ -3,7 +3,7 @@ import { getCurrentUser, isApiConfigured } from '@/lib/api';
 import { dataSignature, runSync, scheduleSync } from '@/lib/sync';
 import { useStore } from '@/store/useStore';
 
-/** 恢复 VPS 登录会话，并通过变更监听与 15 秒轮询保持多页面同步。 */
+/** 恢复 VPS 登录会话，并通过变更监听与 30 秒轮询保持多页面同步。 */
 export default function SyncManager() {
   const lastSignature = useRef<string | null>(null);
 
@@ -21,6 +21,7 @@ export default function SyncManager() {
         : { userId: null, email: null, status: 'disabled', lastPulledAt: 0, lastSyncAt: 0 });
       if (user) void runSync();
 
+      lastSignature.current = dataSignature(useStore.getState());
       stopStore = useStore.subscribe((state) => {
         const signature = dataSignature(state);
         if (lastSignature.current === null) { lastSignature.current = signature; return; }
@@ -32,7 +33,7 @@ export default function SyncManager() {
     });
 
     const syncIfActive = () => { if (useStore.getState().sync.userId) void runSync(); };
-    const poll = window.setInterval(() => { if (document.visibilityState === 'visible') syncIfActive(); }, 15_000);
+    const poll = window.setInterval(() => { if (document.visibilityState === 'visible') syncIfActive(); }, 30_000);
     const onVisible = () => { if (document.visibilityState === 'visible') syncIfActive(); };
     window.addEventListener('online', syncIfActive);
     document.addEventListener('visibilitychange', onVisible);

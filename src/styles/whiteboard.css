@@ -1,0 +1,9 @@
+/* Personal workspace: keep drawing tools and local library, omit external promotion. */
+.personal-whiteboard .excalidraw .help-icon,
+.personal-whiteboard .excalidraw .HelpDialog__header,
+.personal-whiteboard .excalidraw .library-menu-browse-button,
+.personal-whiteboard .excalidraw a[href*="github.com/excalidraw"],
+.personal-whiteboard .excalidraw a[href*="youtube.com/@excalidraw"],
+.personal-whiteboard .excalidraw a[href*="excalidraw.com"] {
+  display: none !important;
+}

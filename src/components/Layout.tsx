@@ -108,7 +108,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">工作助手</div>
-          <div className="truncate text-[11px] text-slate-400">本地优先 · VPS 同步</div>
         </div>
       </div>
 
@@ -134,11 +133,6 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         ))}
       </nav>
 
-      <div className="border-t border-slate-200 px-4 py-3 text-[11px] leading-4 text-slate-400 dark:border-slate-800">
-        本地缓存 · 登录后 VPS 同步
-        <br />
-        建议定期在「设置」中导出备份
-      </div>
     </div>
   );
 }

@@ -14,7 +14,7 @@ let timer: number | null = null;
 let running = false;
 let rerun = false;
 
-export function scheduleSync(delay = 1500): void {
+export function scheduleSync(delay = 2500): void {
   if (!isApiConfigured) return;
   if (timer !== null) window.clearTimeout(timer);
   timer = window.setTimeout(() => { timer = null; void runSync(); }, delay);

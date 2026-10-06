@@ -28,7 +28,7 @@ export interface Settings {
   theme: 'light' | 'dark'; focusMin: number; shortMin: number; longMin: number; longEvery: number; longBreakEnabled: boolean; autoNext: boolean; sound: boolean;
   aiEndpoint: string; aiModel: string; /** 仅保存在当前设备 */ aiApiKey: string;
 }
-export interface WhiteboardRecord { id: string; scene: string; createdAt: number; updatedAt: number }
+export interface WhiteboardRecord { id: string; title?: string; scene: string; createdAt: number; updatedAt: number }
 export type SyncRecord = CalEvent | Todo | TodoList | Note | PomodoroSession | DailyTask | LongTermGoal | WorkLog | WhiteboardRecord;
 export const DEFAULT_LIST_ID = 'inbox';
 export const GUEST_WORKSPACE = 'guest';
@@ -39,7 +39,9 @@ interface WorkspaceSnapshot {
   settings: Settings; timer: PomodoroTimer; dirty: Record<string, 1>; tombstones: Tombstone[]; lastPulledAt: number; lastSyncAt: number;
 }
 interface State extends Omit<WorkspaceSnapshot, 'lastPulledAt' | 'lastSyncAt'> {
-  saveWhiteboard: (scene: string) => void;
+  saveWhiteboard: (scene: string, id?: string) => void;
+  addWhiteboard: (title: string) => string;
+  renameWhiteboard: (id: string, title: string) => void;
   workspaceKey: string; workspaces: Record<string, WorkspaceSnapshot>; sync: SyncState;
   addEvent: (e: Omit<CalEvent, 'id' | 'createdAt' | 'updatedAt'>) => string; updateEvent: (id: string, patch: Partial<CalEvent>) => void; removeEvent: (id: string) => void; toggleEvent: (id: string) => void;
   addTodo: (t: Partial<Todo>) => string; updateTodo: (id: string, patch: Partial<Todo>) => void; removeTodo: (id: string) => void; toggleTodo: (id: string) => void; clearCompletedTodos: (listId?: string) => void;
@@ -89,11 +91,26 @@ const initial = blankWorkspace();
 
 export const useStore = create<State>()(persist((set, get) => ({
   ...initial, workspaceKey: GUEST_WORKSPACE, workspaces: {}, sync: defaultSync,
-  saveWhiteboard: (scene) => set((s) => {
-    const old = s.whiteboards.find((board) => board.id === 'main');
+  addWhiteboard: (title) => {
+    const id = uid(), now = Date.now();
+    set((s) => ({ whiteboards: [...s.whiteboards, { id, title: title.trim() || '新项目', scene: '', createdAt: now, updatedAt: now }], dirty: withDirty(s.dirty, 'whiteboards', id) }));
+    return id;
+  },
+  renameWhiteboard: (id, title) => set((s) => {
+    if (!title.trim()) return s;
+    const old = s.whiteboards.find((board) => board.id === id);
+    if (!old && id !== 'main') return s;
+    const now = Math.max(Date.now(), (old?.updatedAt ?? 0) + 1);
+    const record = { id, title: title.trim(), scene: old?.scene ?? '', createdAt: old?.createdAt ?? now, updatedAt: now };
+    return { whiteboards: old ? s.whiteboards.map((board) => board.id === id ? record : board) : [...s.whiteboards, record], dirty: withDirty(s.dirty, 'whiteboards', id) };
+  }),
+  saveWhiteboard: (scene, id = 'main') => set((s) => {
+    const old = s.whiteboards.find((board) => board.id === id);
+    if (!old && id !== 'main') return s;
     if (old?.scene === scene) return s;
     const now = Math.max(Date.now(), (old?.updatedAt ?? 0) + 1);
-    return { whiteboards: [{ id: 'main', scene, createdAt: old?.createdAt ?? now, updatedAt: now }], dirty: withDirty(s.dirty, 'whiteboards', 'main') };
+    const record = { id, title: old?.title ?? '默认项目', scene, createdAt: old?.createdAt ?? now, updatedAt: now };
+    return { whiteboards: old ? s.whiteboards.map((board) => board.id === id ? record : board) : [...s.whiteboards, record], dirty: withDirty(s.dirty, 'whiteboards', id) };
   }),
   addEvent: (e) => { const id = uid(), now = Date.now(); set((s) => ({ events: [...s.events, { ...e, id, done: e.done ?? false, createdAt: now, updatedAt: now }], dirty: withDirty(s.dirty, 'events', id) })); return id; },
   updateEvent: (id, patch) => set((s) => ({ events: s.events.map((e) => e.id === id ? { ...e, ...patch, updatedAt: Date.now() } : e), dirty: withDirty(s.dirty, 'events', id) })),
