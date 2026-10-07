@@ -87,13 +87,14 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }));
 app.get('/api/account/storage', requireUser, async (req, res, next) => {
   try {
     const { rows } = await pool.query(`
-      SELECT COALESCE(SUM(octet_length(data::text)), 0)::text AS bytes,
+      SELECT COALESCE(SUM(pg_column_size(data)), 0)::text AS bytes,
         COUNT(*) FILTER (WHERE NOT deleted)::int AS records,
-        COALESCE(SUM(octet_length(data::text)) FILTER (WHERE deleted), 0)::text AS "deletedBytes"
+        COALESCE(SUM(pg_column_size(data)) FILTER (WHERE deleted), 0)::text AS "deletedBytes",
+        pg_database_size(current_database())::text AS "databaseBytes"
       FROM app_records WHERE user_id=$1
     `, [req.user.id]);
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ bytes: Number(rows[0].bytes), records: rows[0].records, deletedBytes: Number(rows[0].deletedBytes) });
+    res.json({ bytes: Number(rows[0].bytes), records: rows[0].records, deletedBytes: Number(rows[0].deletedBytes), databaseBytes: Number(rows[0].databaseBytes) });
   } catch (error) { next(error); }
 });
 app.get('/api/auth/session', async (req, res, next) => {

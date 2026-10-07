@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Excalidraw, MainMenu, serializeAsJSON } from '@excalidraw/excalidraw';
-import { Plus, Pencil } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, RefreshCw } from 'lucide-react';
 import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState, ExcalidrawProps } from '@excalidraw/excalidraw/types';
 import '@excalidraw/excalidraw/index.css';
 import { useStore } from '@/store/useStore';
@@ -17,6 +18,7 @@ export default function Whiteboard() {
 }
 
 function Projects({ workspaceKey }: { workspaceKey: string }) {
+  const navigate = useNavigate();
   const boards = useStore((s) => s.whiteboards);
   const [selectedId, setSelectedId] = useState('main');
   const [dialog, setDialog] = useState<'create' | 'rename' | null>(null);
@@ -33,17 +35,17 @@ function Projects({ workspaceKey }: { workspaceKey: string }) {
   };
 
   return (
-    <section className="personal-whiteboard flex h-[calc(100dvh-3.5rem)] min-h-0 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b bg-white px-3 py-2 dark:bg-slate-900">
+    <section className="personal-whiteboard flex h-dvh min-h-0 flex-col overflow-hidden">
+      <Board key={selected.id} workspaceKey={workspaceKey} boardId={selected.id} flushRef={flushRef} toolbar={<>
+        <button className="btn-ghost shrink-0 px-2" aria-label="返回工作助手" title="返回工作助手" onClick={() => { if (flushRef.current()) navigate('/'); }}><ArrowLeft size={18} /><span className="hidden sm:inline">返回</span></button>
         <label className="sr-only" htmlFor="whiteboard-project">白板项目</label>
-        <select id="whiteboard-project" className="input w-auto min-w-0 max-w-[55vw] py-1.5 sm:max-w-xs" value={selected.id}
+        <select id="whiteboard-project" className="input w-24 min-w-0 shrink-0 py-1.5 sm:w-44" value={selected.id}
           onChange={(event) => { if (flushRef.current()) setSelectedId(event.target.value); }}>
           {projects.map((board) => <option key={board.id} value={board.id}>{board.title || '默认项目'}</option>)}
         </select>
-        <button className="btn-outline" onClick={() => { setTitle(''); setDialog('create'); }}><Plus size={15} />新建项目</button>
+        <button className="btn-outline shrink-0 px-2" aria-label="新建项目" title="新建项目" onClick={() => { setTitle(''); setDialog('create'); }}><Plus size={15} /><span className="hidden sm:inline">新建项目</span></button>
         <button className="btn-ghost" aria-label="重命名项目" title="重命名项目" onClick={() => { setTitle(selected.title || '默认项目'); setDialog('rename'); }}><Pencil size={15} /></button>
-      </div>
-      <Board key={selected.id} workspaceKey={workspaceKey} boardId={selected.id} flushRef={flushRef} />
+      </>} />
       <Modal open={dialog !== null} title={dialog === 'create' ? '新建白板项目' : '重命名项目'} onClose={() => setDialog(null)}
         footer={<><button className="btn-ghost" onClick={() => setDialog(null)}>取消</button><button className="btn-primary" disabled={!title.trim()} onClick={submit}>保存</button></>}>
         <form onSubmit={(event) => { event.preventDefault(); submit(); }}>
@@ -55,7 +57,7 @@ function Projects({ workspaceKey }: { workspaceKey: string }) {
   );
 }
 
-function Board({ workspaceKey, boardId, flushRef }: { workspaceKey: string; boardId: string; flushRef: React.MutableRefObject<() => boolean> }) {
+function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: string; boardId: string; flushRef: React.MutableRefObject<() => boolean>; toolbar: ReactNode }) {
   const record = useStore((s) => s.whiteboards.find((board) => board.id === boardId));
   const theme = useStore((s) => s.settings.theme);
   const userId = useStore((s) => s.sync.userId);
@@ -70,6 +72,11 @@ function Board({ workspaceKey, boardId, flushRef }: { workspaceKey: string; boar
     try { return record?.scene ? JSON.parse(record.scene) : { elements: [] }; }
     catch { return { elements: [] }; }
   });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
 
   const flush = () => {
     if (pending.current === null) return true;
@@ -128,11 +135,12 @@ function Board({ workspaceKey, boardId, flushRef }: { workspaceKey: string; boar
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b bg-white px-3 py-2 text-sm dark:bg-slate-900">
-        <span className={error ? 'text-rose-600' : 'text-slate-500 dark:text-slate-400'} role="status">
-          {error || (!userId ? '本地保存 · 登录后可同步到 VPS' : dirty ? '等待同步到 VPS' : status === 'syncing' ? '同步中…' : status === 'error' || status === 'offline' ? '同步暂不可用 · 本地内容保留' : '已保存 · VPS 同步')}
+      <div className="flex shrink-0 items-center gap-1 border-b bg-white px-2 py-2 text-sm sm:gap-2 sm:px-3 dark:bg-slate-900">
+        {toolbar}
+        <span className={`ml-auto min-w-0 truncate ${error ? 'text-rose-600' : 'text-slate-500 dark:text-slate-400'}`} role="status" title={error || (!userId ? '已保存到本地，登录后可跨设备同步' : status === 'error' || status === 'offline' ? '同步暂不可用，本地内容保留' : undefined)}>
+          {error || (!userId ? '已保存' : dirty ? '待同步' : status === 'syncing' ? '同步中…' : status === 'error' || status === 'offline' ? '同步失败' : '已同步')}
         </span>
-        {userId && <button className="btn-ghost shrink-0" onClick={() => { if (flush()) void runSync(); }}>立即同步</button>}
+        {userId && <button className="btn-ghost shrink-0 px-2" aria-label="立即同步" title="立即同步" onClick={() => { if (flush()) void runSync(); }}><RefreshCw size={16} /><span className="hidden sm:inline">立即同步</span></button>}
       </div>
       <div className="min-h-0 flex-1">
         <Excalidraw excalidrawAPI={setApi} initialData={initialData} onChange={onChange} langCode="zh-CN" theme={theme} name={record?.title || '默认项目'}>

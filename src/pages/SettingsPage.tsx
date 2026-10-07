@@ -58,7 +58,7 @@ export default function SettingsPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const [accountStorage, setAccountStorage] = useState<{ bytes: number; records: number; deletedBytes: number } | null>(null);
+  const [accountStorage, setAccountStorage] = useState<{ bytes: number; records: number; deletedBytes: number; databaseBytes: number } | null>(null);
   const [storageError, setStorageError] = useState('');
 
   useEffect(() => {
@@ -66,13 +66,15 @@ export default function SettingsPage() {
     setAccountStorage(null);
     setStorageError('');
     if (!store.sync.userId) return;
-    void apiFetch<{ bytes: number; records: number; deletedBytes: number }>('/account/storage')
+    void apiFetch<{ bytes: number; records: number; deletedBytes: number; databaseBytes: number }>('/account/storage')
       .then((value) => { if (!cancelled) setAccountStorage(value); })
       .catch((error) => { if (!cancelled) setStorageError(error instanceof Error ? error.message : '无法读取储存空间'); });
     return () => { cancelled = true; };
   }, [store.sync.userId, store.sync.lastSyncAt]);
 
-  const formatBytes = (bytes: number) => bytes >= 1024 * 1024
+  const formatBytes = (bytes: number) => bytes >= 1024 * 1024 * 1024
+    ? `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
+    : bytes >= 1024 * 1024
     ? `${(bytes / (1024 * 1024)).toFixed(2)} MB`
     : `${(bytes / 1024).toFixed(1)} KB`;
 
@@ -207,9 +209,12 @@ export default function SettingsPage() {
                 : '尚未同步过'}
             </p>
             <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
-              <p className="text-sm">VPS 数据占用：{accountStorage ? formatBytes(accountStorage.bytes) : storageError ? '暂时无法读取' : '读取中…'}</p>
-              {accountStorage && <p className="mt-1 text-xs text-slate-500">{accountStorage.records} 条有效记录 · 已删除记录占用 {formatBytes(accountStorage.deletedBytes)}</p>}
-              <p className="mt-1 text-xs text-slate-500">按当前账号已同步记录的 JSON 字节数统计，包含已删除记录，不含数据库索引等共享开销。</p>
+              <p className="text-sm">当前账号数据存储：{accountStorage ? formatBytes(accountStorage.bytes) : storageError ? '暂时无法读取' : '读取中…'}</p>
+              {accountStorage && <>
+                <p className="mt-1 text-sm">整个数据库磁盘占用：{Number.isFinite(accountStorage.databaseBytes) ? formatBytes(accountStorage.databaseBytes) : '请更新 VPS 后端'}</p>
+                <p className="mt-1 text-xs text-slate-500">{accountStorage.records} 条有效记录 · 删除标记数据 {formatBytes(accountStorage.deletedBytes)}</p>
+              </>}
+              <p className="mt-1 text-xs text-slate-500">账号存储按数据库数据字段的实际大小统计；数据库磁盘占用包含所有账号、索引和共享开销。</p>
               {storageError && <p className="mt-1 text-xs text-rose-600">{storageError}</p>}
             </div>
             {store.sync.lastError && (

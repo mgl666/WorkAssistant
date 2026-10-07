@@ -27,6 +27,7 @@ export default function App() {
         <SyncManager />
         <PomodoroRuntime />
         <Routes>
+          <Route path="/whiteboard" element={<Suspense fallback={<p className="p-4 text-sm text-slate-500">正在加载白板…</p>}><Whiteboard /></Suspense>} />
           <Route element={<Layout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/calendar" element={<CalendarPage />} />
@@ -37,7 +38,6 @@ export default function App() {
             <Route path="/daily" element={<Daily />} />
             <Route path="/goals" element={<LongTermGoals />} />
             <Route path="/notes" element={<Notes />} />
-            <Route path="/whiteboard" element={<Suspense fallback={<p className="p-4 text-sm text-slate-500">正在加载白板…</p>}><Whiteboard /></Suspense>} />
             <Route path="/weekly" element={<Weekly />} />
             <Route path="/tools" element={<Tools />} />
             <Route path="/other" element={<Other />} />

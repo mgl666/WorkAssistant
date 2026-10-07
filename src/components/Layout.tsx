@@ -188,9 +188,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className={cn('w-full flex-1', pathname === '/whiteboard'
-          ? 'h-[calc(100dvh-3.5rem)] min-h-0 overflow-hidden'
-          : 'mx-auto max-w-7xl overflow-x-hidden p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6')}>
+        <main className="mx-auto w-full max-w-7xl flex-1 overflow-x-hidden p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4 md:p-6">
           <Outlet />
         </main>
       </div>
