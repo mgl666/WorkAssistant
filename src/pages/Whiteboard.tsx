@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Excalidraw, MainMenu, serializeAsJSON } from '@excalidraw/excalidraw';
-import { ArrowLeft, Plus, Pencil, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Check, ChevronDown, Folder, Plus, Pencil, RefreshCw } from 'lucide-react';
 import type { ExcalidrawImperativeAPI, ExcalidrawInitialDataState, ExcalidrawProps } from '@excalidraw/excalidraw/types';
 import '@excalidraw/excalidraw/index.css';
 import { useStore } from '@/store/useStore';
@@ -38,11 +38,11 @@ function Projects({ workspaceKey }: { workspaceKey: string }) {
     <section className="personal-whiteboard flex h-dvh min-h-0 flex-col overflow-hidden">
       <Board key={selected.id} workspaceKey={workspaceKey} boardId={selected.id} flushRef={flushRef} toolbar={<>
         <button className="btn-ghost shrink-0 px-2" aria-label="返回工作助手" title="返回工作助手" onClick={() => { if (flushRef.current()) navigate('/'); }}><ArrowLeft size={18} /><span className="hidden sm:inline">返回</span></button>
-        <label className="sr-only" htmlFor="whiteboard-project">白板项目</label>
-        <select id="whiteboard-project" className="input w-24 min-w-0 shrink-0 py-1.5 sm:w-44" value={selected.id}
-          onChange={(event) => { if (flushRef.current()) setSelectedId(event.target.value); }}>
-          {projects.map((board) => <option key={board.id} value={board.id}>{board.title || '默认项目'}</option>)}
-        </select>
+        <ProjectPicker projects={projects} selectedId={selected.id} onSelect={(id) => {
+          if (!flushRef.current()) return false;
+          setSelectedId(id);
+          return true;
+        }} />
         <button className="btn-outline shrink-0 px-2" aria-label="新建项目" title="新建项目" onClick={() => { setTitle(''); setDialog('create'); }}><Plus size={15} /><span className="hidden sm:inline">新建项目</span></button>
         <button className="btn-ghost" aria-label="重命名项目" title="重命名项目" onClick={() => { setTitle(selected.title || '默认项目'); setDialog('rename'); }}><Pencil size={15} /></button>
       </>} />
@@ -54,6 +54,66 @@ function Projects({ workspaceKey }: { workspaceKey: string }) {
         </form>
       </Modal>
     </section>
+  );
+}
+
+function ProjectPicker({ projects, selectedId, onSelect }: {
+  projects: Array<{ id: string; title?: string }>;
+  selectedId: string;
+  onSelect: (id: string) => boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const selected = projects.find((project) => project.id === selectedId);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOutside);
+    root.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')?.focus();
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, [open]);
+
+  return (
+    <div ref={root} className="relative z-40 w-24 shrink-0 sm:w-44" onKeyDown={(event) => {
+      if (event.key === 'Escape' && open) {
+        event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.current?.focus();
+      }
+      if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault(); event.stopPropagation();
+      if (!open) { setOpen(true); return; }
+      const options = Array.from(root.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []);
+      const current = options.indexOf(document.activeElement as HTMLButtonElement);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? options.length - 1
+        : (current + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length;
+      options[next]?.focus();
+    }}>
+      <button ref={trigger} type="button" aria-label={`选择白板项目：${selected?.title || '默认项目'}`} aria-haspopup="menu" aria-expanded={open}
+        aria-controls="whiteboard-project-menu" onClick={() => setOpen(!open)}
+        className={`flex h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-indigo-400/40 ${open
+          ? 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-200'
+          : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700'}`}>
+        <Folder size={15} className="hidden shrink-0 opacity-60 sm:block" />
+        <span className="min-w-0 flex-1 truncate text-left">{selected?.title || '默认项目'}</span>
+        <ChevronDown size={14} className={`shrink-0 opacity-60 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div id="whiteboard-project-menu" role="menu" aria-label="白板项目" className="absolute left-0 top-full mt-2 w-56 max-w-[calc(100vw-4rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10 dark:border-slate-700 dark:bg-slate-900">
+        <div className="px-2.5 py-2 text-xs font-medium text-slate-400">切换项目</div>
+        <div className="max-h-64 overflow-y-auto">
+          {projects.map((project) => <button key={project.id} role="menuitemradio" aria-checked={project.id === selectedId} type="button"
+            onClick={() => { if (onSelect(project.id)) { setOpen(false); trigger.current?.focus(); } }}
+            className={`flex min-h-10 w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm outline-none transition focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-400 ${project.id === selectedId
+              ? 'bg-indigo-50 font-medium text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200'
+              : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`}>
+            <span className="min-w-0 flex-1 break-words">{project.title || '默认项目'}</span>
+            {project.id === selectedId && <Check size={15} className="shrink-0" />}
+          </button>)}
+        </div>
+      </div>}
+    </div>
   );
 }
 
