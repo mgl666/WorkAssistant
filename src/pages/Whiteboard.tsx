@@ -129,8 +129,12 @@ function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: str
   const pending = useRef<string | null>(null);
   const applying = useRef(false);
   const [initialData] = useState<ExcalidrawInitialDataState>(() => {
-    try { return record?.scene ? JSON.parse(record.scene) : { elements: [] }; }
-    catch { return { elements: [] }; }
+    try {
+      const scene = record?.scene ? JSON.parse(record.scene) as ExcalidrawInitialDataState : { elements: [] };
+      return { ...scene, appState: { ...scene.appState, objectsSnapModeEnabled: true } };
+    } catch {
+      return { elements: [], appState: { objectsSnapModeEnabled: true } };
+    }
   });
 
   useEffect(() => {
@@ -203,7 +207,7 @@ function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: str
         {userId && <button className="btn-ghost shrink-0 px-2" aria-label="立即同步" title="立即同步" onClick={() => { if (flush()) void runSync(); }}><RefreshCw size={16} /><span className="hidden sm:inline">立即同步</span></button>}
       </div>
       <div className="min-h-0 flex-1">
-        <Excalidraw excalidrawAPI={setApi} initialData={initialData} onChange={onChange} langCode="zh-CN" theme={theme} name={record?.title || '默认项目'}>
+        <Excalidraw excalidrawAPI={setApi} initialData={initialData} onChange={onChange} langCode="zh-CN" theme={theme} name={record?.title || '默认项目'} objectsSnapModeEnabled>
           <MainMenu>
             <MainMenu.DefaultItems.LoadScene />
             <MainMenu.Item onSelect={() => {
