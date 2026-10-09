@@ -7,7 +7,7 @@ import '@excalidraw/excalidraw/index.css';
 import { useStore } from '@/store/useStore';
 import { runSync } from '@/lib/sync';
 import { Modal } from '@/components/ui';
-import WhiteboardPorts from '@/components/WhiteboardPorts';
+import { installArrowMidpointSnapping } from '@/lib/whiteboardArrowSnapping';
 import { downloadFile } from '@/lib/utils';
 import '@/styles/whiteboard.css';
 
@@ -126,6 +126,13 @@ function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: str
   const status = useStore((s) => s.sync.status);
   const [api, setApi] = useState<ExcalidrawImperativeAPI | null>(null);
   const [error, setError] = useState('');
+  const arrowSnapping = useRef<ReturnType<typeof installArrowMidpointSnapping> | null>(null);
+  useEffect(() => {
+    if (!api) return;
+    const snapping = installArrowMidpointSnapping(api);
+    arrowSnapping.current = snapping;
+    return () => { snapping.dispose(); arrowSnapping.current = null; };
+  }, [api]);
   const lastScene = useRef(record?.scene ?? '');
   const pending = useRef<string | null>(null);
   const applying = useRef(false);
@@ -188,6 +195,8 @@ function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: str
 
   const onChange: NonNullable<ExcalidrawProps['onChange']> = (elements, appState, files) => {
     if (applying.current || appState.isLoading) return;
+    // Persist the snapped geometry, so local saves cannot restore a pre-snap scene.
+    arrowSnapping.current?.normalize(elements, appState);
     // The "database" serializer deliberately omits image files; keep them for sync.
     const scene = JSON.stringify(JSON.parse(serializeAsJSON(elements, appState, files, 'local')));
     if (scene === lastScene.current) return;
@@ -222,7 +231,6 @@ function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: str
             <MainMenu.DefaultItems.ChangeCanvasBackground />
           </MainMenu>
         </Excalidraw>
-        <WhiteboardPorts api={api} />
       </div>
     </div>
   );
