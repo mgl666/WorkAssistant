@@ -7,6 +7,7 @@ import '@excalidraw/excalidraw/index.css';
 import { useStore } from '@/store/useStore';
 import { runSync } from '@/lib/sync';
 import { Modal } from '@/components/ui';
+import WhiteboardPorts from '@/components/WhiteboardPorts';
 import { downloadFile } from '@/lib/utils';
 import '@/styles/whiteboard.css';
 
@@ -206,7 +207,7 @@ function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: str
         </span>
         {userId && <button className="btn-ghost shrink-0 px-2" aria-label="立即同步" title="立即同步" onClick={() => { if (flush()) void runSync(); }}><RefreshCw size={16} /><span className="hidden sm:inline">立即同步</span></button>}
       </div>
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1">
         <Excalidraw excalidrawAPI={setApi} initialData={initialData} onChange={onChange} langCode="zh-CN" theme={theme} name={record?.title || '默认项目'} objectsSnapModeEnabled>
           <MainMenu>
             <MainMenu.DefaultItems.LoadScene />
@@ -221,6 +222,7 @@ function Board({ workspaceKey, boardId, flushRef, toolbar }: { workspaceKey: str
             <MainMenu.DefaultItems.ChangeCanvasBackground />
           </MainMenu>
         </Excalidraw>
+        <WhiteboardPorts api={api} />
       </div>
     </div>
   );
