@@ -131,16 +131,12 @@ function connect(api: ExcalidrawImperativeAPI, source: Port, target: Port) {
 export default function WhiteboardPorts({ api }: { api: ExcalidrawImperativeAPI | null }) {
   const root = useRef<HTMLDivElement>(null);
   const [ports, setPorts] = useState<Port[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
 
   useEffect(() => {
     if (!api) return;
-    const refresh = () => {
-      setPorts(getPorts(api));
-      setSelectedIds(Object.keys(api.getAppState().selectedElementIds));
-    };
+    const refresh = () => setPorts(getPorts(api));
     refresh();
     const stopChange = api.onChange(refresh);
     const stopScroll = api.onScrollChange(refresh);
@@ -187,20 +183,19 @@ export default function WhiteboardPorts({ api }: { api: ExcalidrawImperativeAPI 
   };
 
   const rect = root.current?.getBoundingClientRect();
-  const visible = drag ? ports : ports.filter((port) => selectedIds.includes(port.shapeId));
   return <div ref={root} className="pointer-events-none absolute inset-0 z-20 overflow-hidden" aria-label="白板连接点">
     {drag && rect && <svg className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
       <line x1={drag.source.clientX - rect.left} y1={drag.source.clientY - rect.top}
         x2={(drag.target?.clientX ?? drag.pointerX) - rect.left} y2={(drag.target?.clientY ?? drag.pointerY) - rect.top}
         stroke="#6366f1" strokeWidth="2" strokeDasharray="5 5" />
     </svg>}
-    {rect && visible.map((port) => {
+    {rect && ports.map((port) => {
       const selected = drag?.target?.shapeId === port.shapeId && drag.target.side === port.side;
       const label = SIDES.find((item) => item.side === port.side)!.label;
       return <button key={`${port.shapeId}-${port.side}`} type="button" aria-label={`从图形${label}侧连接点拖出箭头`}
-        title={drag ? '拖到另一图形的连接点' : '拖出箭头'} onPointerDown={(event) => begin(event, port)}
-        className={`pointer-events-auto absolute h-3.5 w-3.5 rounded-full border-2 shadow-sm transition-colors ${selected ? 'border-emerald-600 bg-emerald-300' : 'border-indigo-600 bg-white hover:bg-indigo-100 dark:bg-slate-900'}`}
-        style={{ left: port.clientX - rect.left - 7, top: port.clientY - rect.top - 7 }} />;
+        title={drag ? '拖到另一图形的连接点' : '按住此连接点，拖到另一图形的连接点'} onPointerDown={(event) => begin(event, port)}
+        className={`pointer-events-auto absolute z-10 flex h-5 w-5 items-center justify-center rounded-full border-2 text-xs font-bold leading-none text-white shadow-md ring-2 ring-white transition-transform hover:scale-125 dark:ring-slate-900 ${selected ? 'border-emerald-700 bg-emerald-500' : 'border-indigo-700 bg-indigo-500'}`}
+        style={{ left: port.clientX - rect.left - 10, top: port.clientY - rect.top - 10 }}>+</button>;
     })}
   </div>;
 }
